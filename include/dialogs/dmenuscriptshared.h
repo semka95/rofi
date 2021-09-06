@@ -1,6 +1,10 @@
 #ifndef ROFI_DIALOGS_DMENU_SCRIPT_SHARED_H
 #define ROFI_DIALOGS_DMENU_SCRIPT_SHARED_H
 
+#include <glib.h>
+#include <mode.h>
+#include <stdint.h>
+
 typedef struct {
   /** Entry content. (visible part) */
   char *entry;

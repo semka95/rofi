@@ -29,13 +29,14 @@
 #define ROFI_XCB_INTERNAL_H
 /** Indication we accept that startup notification api is not yet frozen */
 #define SN_API_NOT_YET_FROZEN
+#include <glib.h>
 #include <libsn/sn.h>
 
-#include "libgwater-xcb.h"
+#include <libgwater-xcb.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_ewmh.h>
 
-#include "nkutils-bindings.h"
+#include <nkutils-bindings.h>
 
 /**
  * Structure to keep xcb stuff around.

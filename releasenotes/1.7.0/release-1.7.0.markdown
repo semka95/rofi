@@ -9,13 +9,38 @@ yet converted to the new format, I hope for some understanding. Even though this
 deprecation in previous releases and consequential removal of these options is needed for two reasons.
 The most important one is to keep rofi maintainable and secondary to open possibility to overhaul the config system in
 the future and with that fixing some long standing bugs and add new options that
-where hindered by the almost 10 year old system.
+where hindered by the almost 10 year old system, the new system has been around for more than 4 years.
 
 Beside mostly bug-fixes and removal of deprecated options, we also improved the theming and added features to help in
 some of the more 'off-script' use of rofi.
 
-This release was made possible by many contributors, see below for a full list. Big thanks again to SardemF77 and
+This release was made possible by many contributors, see below for a full list. Big thanks again to SardemFF7 and
 TonCherAmi.
+
+
+## Default theme loading
+
+In older version of **rofi** the default theme was (almost) always loaded based on some unclear rules, sometimes 
+some random patch code was loaded and sometimes no theme was loaded before loading another theme.
+
+The current version of rofi this is hopefully more logic.  It loads the default
+theme by default using the default configuration. (Can be disabled by `-no-default-config`).
+Using `-theme`, or `@theme` primitive will discard the theme completely.
+
+So the below css completely removes the default theme, and loads `iggy`.
+
+```css
+configuration {
+
+
+}
+
+@theme "iggy"
+
+element {
+    children: [element-icon, element-text];
+}
+```
 
 ## File Browser
 
@@ -47,7 +72,7 @@ configuration {
 ## File Completion
 
 In rofi 1.7.0 a long awaited patch I wrote many years ago landed into the rofi.
-This patch adds some basic completion support by changing modi. Currently it
+This patch adds some basic completion support by chaining modi. Currently it
 only supports chaining the FileBrowser mode. This allows you to launch an
 application with a file as argument.  This is currently supported in the Run
 and the DRun modi by pressing the `Control-l` keybinding.  For the Run mode it
@@ -323,6 +348,20 @@ message {
 }
 
 ```
+
+* FIX: [Build] Fix CI.
+
+* FIX: [Theme] Discard old theme, when explicitly passing one on command line.
+
+In previous version there was a bug when passing `-theme` on commandline did not discard old theme.
+This caused problems loading themes (as it merged two themes instead of loading them).
+
+To get old behaviour on commandline do:
+
+```bash
+
+rofi -theme-str '@import "mytheme"' -show drun
+````
 
 * REMOVE: -dump-xresources
 * REMOVE: -fullscreen

@@ -29,7 +29,7 @@
 #define ROFI_KEYB_H
 
 #include <glib.h>
-#include "nkutils-bindings.h"
+#include <nkutils-bindings.h>
 
 /**
  * @defgroup KEYB KeyboardBindings

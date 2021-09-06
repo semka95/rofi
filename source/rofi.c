@@ -843,7 +843,7 @@ int main(int argc, char *argv[]) {
                            "Pidfile location");
 
   /** default configuration */
-  {
+  if (find_arg("-no-default-config") < 0) {
     GBytes *theme_data = g_resource_lookup_data(
         resources_get_resource(), "/org/qtools/rofi/default_configuration.rasi",
         G_RESOURCE_LOOKUP_FLAGS_NONE, NULL);
@@ -963,6 +963,7 @@ int main(int argc, char *argv[]) {
     TICK_N("Parse theme");
     rofi_theme_reset();
     if (rofi_theme_parse_file(config.theme)) {
+      g_warning("Failed to parse theme: \"%s\"", config.theme);
       // TODO: instantiate fallback theme.?
       rofi_theme_free(rofi_theme);
       rofi_theme = NULL;
@@ -1003,28 +1004,6 @@ int main(int argc, char *argv[]) {
       windowid = config.monitor;
     }
   }
-  if (rofi_theme_is_empty()) {
-    GBytes *theme_data = g_resource_lookup_data(
-        resources_get_resource(), "/org/qtools/rofi/default_theme.rasi",
-        G_RESOURCE_LOOKUP_FLAGS_NONE, NULL);
-    if (theme_data) {
-      const char *theme = g_bytes_get_data(theme_data, NULL);
-      if (rofi_theme_parse_string((const char *)theme)) {
-        g_warning("Failed to parse default theme. Giving up..");
-        if (list_of_error_msgs) {
-          for (GList *iter = g_list_first(list_of_error_msgs); iter != NULL;
-               iter = g_list_next(iter)) {
-            g_warning("Error: %s%s%s", color_bold, ((GString *)iter->data)->str,
-                      color_reset);
-          }
-        }
-        rofi_theme = NULL;
-        cleanup();
-        return EXIT_FAILURE;
-      }
-      g_bytes_unref(theme_data);
-    }
-  }
 
   /**
    * Make small commandline changes to the current theme.
@@ -1033,6 +1012,8 @@ int main(int argc, char *argv[]) {
   if (theme_str) {
     for (int index = 0; theme_str && theme_str[index]; index++) {
       if (rofi_theme_parse_string(theme_str[index])) {
+        g_warning("Failed to parse -theme-str option: \"%s\"",
+                  theme_str[index]);
         rofi_theme_free(rofi_theme);
         rofi_theme = NULL;
       }

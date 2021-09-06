@@ -30,7 +30,6 @@
 
 #include "rofi-types.h"
 #include "widget.h"
-#include "rofi-types.h"
 
 /**
  * @defgroup box box

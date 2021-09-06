@@ -1,5 +1,5 @@
 project('rofi', 'c',
-    version: '1.6.1-wayland-dev',
+    version: '1.7.0-wayland',
     meson_version: '>=0.47.0',
     license: [ 'MIT' ],
     default_options: [
@@ -359,6 +359,7 @@ test('widget test', executable('widget.test', [
         'test/widget-test.c',
         theme_parser,
         theme_lexer,
+        default_theme,
     ],
     objects: rofi.extract_objects([
         'source/widgets/widget.c',
@@ -376,6 +377,7 @@ test('box test', executable('box.test', [
         'test/box-test.c',
         theme_parser,
         theme_lexer,
+        default_theme,
     ],
     objects: rofi.extract_objects([
         'source/widgets/widget.c',
@@ -392,6 +394,7 @@ test('scrollbar test', executable('scrollbar.test', [
         'test/scrollbar-test.c',
         theme_parser,
         theme_lexer,
+        default_theme,
     ],
     objects: rofi.extract_objects([
         'source/widgets/widget.c',
@@ -408,6 +411,7 @@ test('textbox test', executable('textbox.test', [
         'test/textbox-test.c',
         theme_parser,
         theme_lexer,
+        default_theme,
     ],
     objects: rofi.extract_objects([
         'source/widgets/widget.c',
@@ -467,6 +471,7 @@ if check.found()
             'test/theme-parser-test.c',
             theme_lexer,
             theme_parser,
+            default_theme,
         ],
         objects: rofi.extract_objects([
             'config/config.c',
@@ -509,20 +514,6 @@ if check.found()
     ))
 endif
 
-
-run_target('test-x', command: [ 'test/run_all_tests.sh' ], depends: [ rofi ])
-
-uncrustify = find_program('uncrustify', required: false)
-if uncrustify.found()
-    run_target('indent',
-        command: [
-            uncrustify,
-            '-c', join_paths(meson.source_root(), 'data', 'uncrustify.cfg'),
-            '--replace',
-            rofi_sources
-        ],
-    )
-endif
 
 rofi_sources += theme_lexer_sources
 rofi_sources += theme_parser_sources
