@@ -112,6 +112,8 @@ static struct
     guint              repaint_source;
     /** Window fullscreen */
     gboolean           fullscreen;
+    /** Cursor type */
+    X11CursorType      cursor_type;
 } XcbState = {
     .fake_bg        = NULL,
     .edit_surf      = NULL,
@@ -189,11 +191,19 @@ static void xcb_rofi_view_capture_screenshot ( void )
  * Code used for benchmarking drawing the gui, this will keep updating the UI as fast as possible.
  */
 gboolean do_bench = TRUE;
-struct
+
+/**
+ * Internal structure that hold benchmarking information.
+ */
+static struct
 {
+    /** timer used for timestamping. */
     GTimer   *time;
+    /** number of draws done. */
     uint64_t draws;
+    /** previous timestamp */
     double   last_ts;
+    /** minimum draw time. */
     double   min;
 } BenchMark = {
     .time    = NULL,
@@ -456,6 +466,48 @@ static void xcb_rofi_view_window_update_size ( RofiViewState * state )
     widget_resize ( WIDGET ( state->main_window ), state->width, state->height );
 }
 
+static X11CursorType rofi_cursor_type_to_x11_cursor_type(RofiCursorType type) {
+  switch (type) {
+  case ROFI_CURSOR_DEFAULT:
+    return CURSOR_DEFAULT;
+
+  case ROFI_CURSOR_POINTER:
+    return CURSOR_POINTER;
+
+  case ROFI_CURSOR_TEXT:
+    return CURSOR_TEXT;
+  }
+
+  return CURSOR_DEFAULT;
+}
+
+static void xcb_rofi_view_set_cursor ( RofiCursorType type )
+{
+    X11CursorType x11_type = rofi_cursor_type_to_x11_cursor_type ( type );
+
+    if ( x11_type == XcbState.cursor_type ) {
+        return;
+    }
+
+    XcbState.cursor_type = x11_type;
+
+    x11_set_cursor ( CacheState.main_window, x11_type );
+}
+
+static void xcb_rofi_view_ping_mouse ( RofiViewState *state )
+{
+    xcb_query_pointer_cookie_t pointer_cookie = xcb_query_pointer ( xcb->connection, CacheState.main_window );
+    xcb_query_pointer_reply_t  *pointer_reply = xcb_query_pointer_reply ( xcb->connection, pointer_cookie, NULL );
+
+    if ( pointer_reply == NULL ) {
+        return;
+    }
+
+    rofi_view_handle_mouse_motion ( state, pointer_reply->win_x, pointer_reply->win_y, config.hover_select );
+
+    free ( pointer_reply );
+}
+
 static gboolean xcb_rofi_view_reload_idle ( G_GNUC_UNUSED gpointer data )
 {
     RofiViewState * state = rofi_view_get_active ();
@@ -487,7 +539,7 @@ static void xcb_rofi_view_queue_redraw ( void  )
     }
 }
 
-static void xcb_rofi_view_setup_fake_transparency ( const char* const fake_background )
+static void xcb_rofi_view_setup_fake_transparency ( widget *win, const char* const fake_background )
 {
     if ( XcbState.fake_bg == NULL ) {
         cairo_surface_t *s = NULL;
@@ -508,7 +560,7 @@ static void xcb_rofi_view_setup_fake_transparency ( const char* const fake_backg
         else {
             char *fpath = rofi_expand_path ( fake_background );
             g_debug ( "Opening %s to use as background.", fpath );
-            s                   = cairo_image_surface_create_from_png ( fpath );
+            s                     = cairo_image_surface_create_from_png ( fpath );
             XcbState.fake_bgrel = TRUE;
             g_free ( fpath );
         }
@@ -522,7 +574,9 @@ static void xcb_rofi_view_setup_fake_transparency ( const char* const fake_backg
             }
             else {
                 XcbState.fake_bg = cairo_image_surface_create ( CAIRO_FORMAT_ARGB32, XcbState.mon.w, XcbState.mon.h );
-                cairo_t *dr = cairo_create ( XcbState.fake_bg );
+
+                int     blur = rofi_theme_get_integer ( WIDGET ( win ), "blur", 0 );
+                cairo_t *dr  = cairo_create ( XcbState.fake_bg );
                 if ( XcbState.fake_bgrel ) {
                     cairo_set_source_surface ( dr, s, 0, 0 );
                 }
@@ -532,6 +586,10 @@ static void xcb_rofi_view_setup_fake_transparency ( const char* const fake_backg
                 cairo_paint ( dr );
                 cairo_destroy ( dr );
                 cairo_surface_destroy ( s );
+                if ( blur > 0 ) {
+                    cairo_image_surface_blur ( XcbState.fake_bg, (double) blur, 0 );
+                    TICK_N ( "BLUR" );
+                }
             }
         }
         TICK_N ( "Fake transparency" );
@@ -539,14 +597,16 @@ static void xcb_rofi_view_setup_fake_transparency ( const char* const fake_backg
 }
 static void xcb___create_window ( MenuFlags menu_flags )
 {
-    uint32_t          selmask  = XCB_CW_BACK_PIXMAP | XCB_CW_BORDER_PIXEL | XCB_CW_BIT_GRAVITY | XCB_CW_BACKING_STORE | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
+    uint32_t selmask         = XCB_CW_BACK_PIXMAP | XCB_CW_BORDER_PIXEL | XCB_CW_BIT_GRAVITY | XCB_CW_BACKING_STORE | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
+    uint32_t xcb_event_masks = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE |
+                               XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_KEYMAP_STATE |
+                               XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_FOCUS_CHANGE | XCB_EVENT_MASK_BUTTON_1_MOTION | XCB_EVENT_MASK_POINTER_MOTION;
+
     uint32_t          selval[] = {
-        XCB_BACK_PIXMAP_NONE,                                                                           0,
+        XCB_BACK_PIXMAP_NONE,         0,
         XCB_GRAVITY_STATIC,
         XCB_BACKING_STORE_NOT_USEFUL,
-        XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE |
-        XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_KEYMAP_STATE |
-        XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_FOCUS_CHANGE | XCB_EVENT_MASK_BUTTON_1_MOTION,
+        xcb_event_masks,
         map
     };
 
@@ -646,14 +706,19 @@ static void xcb___create_window ( MenuFlags menu_flags )
     }
 
     TICK_N ( "setup window attributes" );
-    XcbState.fullscreen = rofi_theme_get_boolean ( WIDGET ( win ), "fullscreen", config.fullscreen );
+    XcbState.fullscreen = rofi_theme_get_boolean ( WIDGET ( win ), "fullscreen", FALSE );
     if ( XcbState.fullscreen ) {
         xcb_atom_t atoms[] = {
             xcb->ewmh._NET_WM_STATE_FULLSCREEN,
             xcb->ewmh._NET_WM_STATE_ABOVE
         };
-        window_set_atom_prop (  box_window, xcb->ewmh._NET_WM_STATE, atoms, sizeof ( atoms ) / sizeof ( xcb_atom_t ) );
+        window_set_atom_prop ( box_window, xcb->ewmh._NET_WM_STATE, atoms, sizeof ( atoms ) / sizeof ( xcb_atom_t ) );
     }
+
+    xcb_atom_t protocols[] = {
+        netatoms[WM_TAKE_FOCUS]
+    };
+    xcb_icccm_set_wm_protocols ( xcb->connection, box_window, xcb->ewmh.WM_PROTOCOLS, G_N_ELEMENTS ( protocols ), protocols );
 
     TICK_N ( "setup window fullscreen" );
     // Set the WM_NAME
@@ -664,10 +729,7 @@ static void xcb___create_window ( MenuFlags menu_flags )
     TICK_N ( "setup window name and class" );
     const char *transparency = rofi_theme_get_string ( WIDGET ( win ), "transparency", NULL );
     if ( transparency ) {
-        xcb_rofi_view_setup_fake_transparency ( transparency  );
-    }
-    else if ( config.fake_transparency && config.fake_background ) {
-        xcb_rofi_view_setup_fake_transparency ( config.fake_background );
+        xcb_rofi_view_setup_fake_transparency ( WIDGET ( win ), transparency );
     }
     if ( xcb->sncontext != NULL ) {
         sn_launchee_context_setup_window ( xcb->sncontext, CacheState.main_window );
@@ -703,15 +765,8 @@ static void xcb_rofi_view_calculate_window_width ( RofiViewState *state )
         state->width = XcbState.mon.w;
         return;
     }
-    if ( config.menu_width < 0 ) {
-        double fw = textbox_get_estimated_char_width ( );
-        state->width  = -( fw * config.menu_width );
-        state->width += widget_padding_get_padding_width ( WIDGET ( state->main_window ) );
-    }
-    else{
-        // Calculate as float to stop silly, big rounding down errors.
-        state->width = config.menu_width < 101 ? ( XcbState.mon.w / 100.0f ) * ( float ) config.menu_width : config.menu_width;
-    }
+    // Calculate as float to stop silly, big rounding down errors.
+    state->width = ( XcbState.mon.w / 100.0f ) * DEFAULT_MENU_WIDTH;
     // Use theme configured width, if set.
     RofiDistance width = rofi_theme_get_distance ( WIDGET ( state->main_window ), "width", state->width );
     state->width = distance_get_pixel ( width, ROFI_ORIENTATION_HORIZONTAL );
@@ -789,6 +844,7 @@ static int xcb_rofi_view_calculate_window_height ( RofiViewState *state )
 static void xcb_rofi_view_hide ( void )
 {
     if ( CacheState.main_window != XCB_WINDOW_NONE ) {
+        display_revert_input_focus ();
         xcb_unmap_window ( xcb->connection, CacheState.main_window );
         display_early_cleanup ();
     }
@@ -800,6 +856,10 @@ static void xcb_rofi_view_cleanup ()
     if ( XcbState.idle_timeout > 0 ) {
         g_source_remove ( XcbState.idle_timeout );
         XcbState.idle_timeout = 0;
+    }
+    if ( CacheState.user_timeout > 0 ) {
+        g_source_remove ( CacheState.user_timeout );
+        CacheState.user_timeout = 0;
     }
     if ( XcbState.repaint_source > 0 ) {
         g_source_remove ( XcbState.repaint_source );
@@ -858,6 +918,8 @@ static view_proxy view_ = {
     .calculate_window_width    = xcb_rofi_view_calculate_window_width,
     .calculate_window_height   = xcb_rofi_view_calculate_window_height,
     .window_update_size        = xcb_rofi_view_window_update_size,
+    .set_cursor                = xcb_rofi_view_set_cursor,
+    .ping_mouse                = xcb_rofi_view_ping_mouse,
 
     .cleanup = xcb_rofi_view_cleanup,
     .hide    = xcb_rofi_view_hide,

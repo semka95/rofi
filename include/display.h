@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -115,6 +115,9 @@ void display_dump_monitor_layout ( void );
  * Provides the needed child setup function
  */
 void display_startup_notification ( RofiHelperExecuteContext *context, GSpawnChildSetupFunc *child_setup, gpointer *user_data );
+
+void display_set_input_focus ( guint w );
+void display_revert_input_focus ( void );
 
 guint display_scale ( void );
 

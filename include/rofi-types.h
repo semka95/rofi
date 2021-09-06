@@ -2,6 +2,7 @@
 #define INCLUDE_ROFI_TYPES_H
 
 #include <glib.h>
+#include <stdint.h>
 G_BEGIN_DECLS
 
 /**
@@ -21,6 +22,8 @@ typedef enum
     P_BOOLEAN,
     /** Color */
     P_COLOR,
+    /** Image */
+    P_IMAGE,
     /** RofiPadding */
     P_PADDING,
     /** Link to global setting */
@@ -33,6 +36,8 @@ typedef enum
     P_LIST,
     /** Orientation */
     P_ORIENTATION,
+    /** Cursor */
+    P_CURSOR,
     /** Inherit */
     P_INHERIT,
     /** Number of types. */
@@ -141,6 +146,16 @@ typedef enum
 } RofiOrientation;
 
 /**
+ * Cursor type.
+ */
+typedef enum
+{
+    ROFI_CURSOR_DEFAULT,
+    ROFI_CURSOR_POINTER,
+    ROFI_CURSOR_TEXT
+} RofiCursorType;
+
+/**
  * Represent the color in theme.
  */
 typedef struct
@@ -154,6 +169,50 @@ typedef struct
     /**  alpha channel */
     double alpha;
 } ThemeColor;
+
+/**
+ * Theme Image
+ */
+typedef enum
+{
+    ROFI_IMAGE_URL,
+    ROFI_IMAGE_LINEAR_GRADIENT
+} RofiImageType;
+
+typedef enum
+{
+    ROFI_DIRECTION_LEFT,
+    ROFI_DIRECTION_RIGHT,
+    ROFI_DIRECTION_TOP,
+    ROFI_DIRECTION_BOTTOM,
+    ROFI_DIRECTION_ANGLE,
+} RofiDirection;
+
+typedef enum
+{
+    ROFI_SCALE_NONE,
+    ROFI_SCALE_BOTH,
+    ROFI_SCALE_HEIGHT,
+    ROFI_SCALE_WIDTH,
+} RofiScaleType;
+
+typedef struct
+{
+    RofiImageType type;
+    char *url;
+    RofiScaleType scaling;
+    int wsize;
+    int hsize;
+
+    RofiDirection dir;
+    double angle;
+    /** colors */
+    GList *colors;
+
+    /** cached image */
+    uint32_t surface_id;
+
+} RofiImage;
 
 /**
  * RofiPadding
@@ -236,6 +295,8 @@ typedef union _PropertyValue
     }                       link;
     /** Highlight Style */
     RofiHighlightColorStyle highlight;
+    /** Image */
+    RofiImage image;
     /** List */
     GList                   *list;
 } PropertyValue;

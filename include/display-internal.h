@@ -43,6 +43,10 @@ typedef struct _display_proxy {
     void (*dump_monitor_layout) ( void );
     void (*startup_notification) ( RofiHelperExecuteContext *context, GSpawnChildSetupFunc *child_setup, gpointer *user_data );
     int (*monitor_active) ( struct _workarea *mon );
+
+    void (*set_input_focus) ( guint window );
+    void (*revert_input_focus) ( void );
+
     guint (*scale) ( void );
 
     const struct _view_proxy* (*view) ( void );

@@ -16,6 +16,8 @@ const char * const PropertyTypeName[P_NUM_TYPES] = {
     "Boolean",
     /** Color */
     "Color",
+    /** Image */
+    "Image",
     /** Padding */
     "Padding",
     /** Link to global setting */
@@ -28,6 +30,8 @@ const char * const PropertyTypeName[P_NUM_TYPES] = {
     "List",
     /** Orientation */
     "Orientation",
+    /** Cursor */
+    "Cursor",
     /** Inherit */
     "Inherit",
 };

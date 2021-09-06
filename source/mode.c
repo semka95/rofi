@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -153,8 +153,17 @@ void mode_set_private_data ( Mode *mode, void *pd )
 
 const char *mode_get_display_name ( const Mode *mode )
 {
-    if ( mode->display_name != NULL ) {
-        return mode->display_name;
+  /** Find the widget */
+  ThemeWidget *wid = rofi_config_find_widget ( mode->name, NULL, TRUE );
+  if ( wid ) {
+    /** Check string property */
+    Property    *p   = rofi_theme_find_property ( wid, P_STRING, "display-name", TRUE );
+    if ( p != NULL && p->type == P_STRING ) {
+      return p->value.s;
+    }
+  }
+  if ( mode->display_name != NULL ) {
+    return mode->display_name;
     }
     return mode->name;
 }

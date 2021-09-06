@@ -1,5 +1,5 @@
 # Specify automake version.
-AUTOMAKE_OPTIONS  = 1.11.3
+AUTOMAKE_OPTIONS = 1.11.3
 
 ACLOCAL_AMFLAGS = -I subprojects/libnkutils -I subprojects/libgwater ${ACLOCAL_FLAGS}
 
@@ -18,7 +18,6 @@ include $(top_srcdir)/libgwater-xcb-nolibtool.mk
 ##
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = pkgconfig/rofi.pc
-
 
 BUILT_SOURCES=\
 			  lexer/theme-parser.h\
@@ -155,7 +154,6 @@ rofi_CFLAGS=\
 	-I$(top_builddir)/\
 	-Werror=missing-prototypes\
 	-DSYSCONFDIR=\"$(sysconfdir)\"\
-	-DTHEME_CONVERTER\
 	-DPLUGIN_PATH=\"${libdir}/rofi\"\
 	-DTHEME_DIR=\"$(themedir)\"
 
@@ -187,7 +185,6 @@ EXTRA_DIST += \
 	doc/rofi-theme-selector.1.markdown \
 	doc/rofi-sensible-terminal.1.markdown \
 	doc/rofi.1.markdown
-
 
 ##
 # Readme.md
@@ -224,6 +221,7 @@ theme_DATA=\
 		   themes/blue.rasi\
 		   themes/c64.rasi\
 		   themes/dmenu.rasi\
+		   themes/docu.rasi\
 		   themes/glue_pro_blue.rasi\
 		   themes/gruvbox-common.rasi\
 		   themes/gruvbox-dark-hard.rasi\
@@ -238,7 +236,9 @@ theme_DATA=\
 		   themes/sidebar.rasi\
 		   themes/solarized.rasi\
 		   themes/solarized_alternate.rasi\
-		   themes/fancy.rasi
+		   themes/fancy.rasi\
+		   themes/iggy.rasi\
+		   themes/iggy.jpg
 
 ##
 # Extra DIST
@@ -256,11 +256,11 @@ EXTRA_DIST+=\
 	script/get_git_rev.sh\
 	$(theme_DATA)\
 	doc/default_theme.rasi\
+	doc/default_configuration.rasi\
 	Changelog
 ##
 # Indent
 ##
-
 
 update-manpage: $(top_srcdir)/doc/rofi-theme-selector.1.markdown $(top_srcdir)/doc/rofi.1.markdown $(top_srcdir)/doc/rofi-theme.5.markdown $(top_srcdir)/doc/rofi-script.5.markdown ${top_srcdir}/doc/rofi-sensible-terminal.1.markdown
 	go-md2man -in $(top_srcdir)/doc/rofi.1.markdown -out $(top_srcdir)/doc/rofi.1
@@ -287,8 +287,6 @@ if USE_CHECK
 check_PROGRAMS+=mode_test theme_parser_test helper_tokenize
 endif
 
-
-
 history_test_CFLAGS=\
 	$(AM_CFLAGS)\
 	$(glib_CFLAGS)\
@@ -304,7 +302,6 @@ history_test_CFLAGS=\
 history_test_LDADD=\
 	$(glib_LIBS)\
 	$(NKUTILS_LIBS)
-
 
 history_test_SOURCES=\
 	source/history.c\
@@ -349,6 +346,7 @@ helper_pidfile_SOURCES=\
 					   include/mode.h\
 					   include/mode-private.h\
 					   source/helper.c\
+					   source/theme.c\
 					   source/rofi-types.c\
 					   include/rofi-types.h\
 					   include/helper.h\
@@ -385,7 +383,7 @@ box_test_SOURCES=\
 			source/css-colors.c\
 			include/theme.h\
 			include/css-colors.h\
-      config/config.c\
+			config/config.c\
 			test/box-test.c
 
 scrollbar_test_LDADD=$(textbox_test_LDADD)
@@ -401,7 +399,7 @@ scrollbar_test_SOURCES=\
 			source/css-colors.c\
 			include/theme.h\
 			include/css-colors.h\
-      config/config.c\
+			config/config.c\
 			test/scrollbar-test.c
 
 textbox_test_SOURCES=\
@@ -463,10 +461,10 @@ helper_test_SOURCES=\
 	include/helper-theme.h\
 	include/xrmoptions.h\
 	source/xrmoptions.c\
+	source/theme.c\
 	source/rofi-types.c\
 	include/rofi-types.h\
 	test/helper-test.c
-
 
 helper_test_CFLAGS=\
 	$(AM_CFLAGS)\
@@ -493,13 +491,13 @@ helper_test_LDADD=\
 	$(libsn_LIBS)\
 	$(cairo_LIBS)
 
-
 helper_expand_SOURCES=\
 	config/config.c\
 	include/rofi.h\
 	include/mode.h\
 	include/mode-private.h\
 	source/helper.c\
+	source/theme.c\
 	include/helper.h\
 	include/helper-theme.h\
 	include/xrmoptions.h\
@@ -521,6 +519,7 @@ helper_config_cmdline_parser_SOURCES=\
 	include/mode.h\
 	include/mode-private.h\
 	source/helper.c\
+	source/theme.c\
 	source/rofi-types.c\
 	include/rofi-types.h\
 	include/helper.h\
@@ -529,15 +528,15 @@ helper_config_cmdline_parser_SOURCES=\
 	source/xrmoptions.c\
 	test/helper-config-cmdline-parser.c
 
-
 if USE_CHECK
 mode_test_CFLAGS=$(textbox_test_CFLAGS) $(check_CFLAGS)
 mode_test_LDADD=$(textbox_test_LDADD) $(check_LIBS)
 mode_test_SOURCES=\
 				  config/config.c\
 				  test/mode-test.c\
-			      source/dialogs/help-keys.c\
+				  source/dialogs/help-keys.c\
 				  source/helper.c\
+				  source/theme.c\
 				  source/mode.c\
 				  source/rofi-types.c\
 				  include/rofi-types.h\
@@ -553,6 +552,7 @@ helper_tokenize_SOURCES=\
 					   include/mode.h\
 					   include/mode-private.h\
 					   source/helper.c\
+					   source/theme.c\
 					   source/rofi-types.c\
 					   include/rofi-types.h\
 					   include/helper.h\
@@ -560,7 +560,6 @@ helper_tokenize_SOURCES=\
 					   include/xrmoptions.h\
 					   source/xrmoptions.c\
 					   test/helper-tokenize.c
-
 endif
 
 TESTS+=\
@@ -586,18 +585,15 @@ test-x: $(bin_PROGRAMS)
 	MESON_BUILD_ROOT="$(top_builddir)" \
 	$(top_srcdir)/test/run_all_tests.sh
 
-
 .PHONY: indent
 indent: $(SOURCES)
 	uncrustify -c $(top_srcdir)/data/uncrustify.cfg --replace $^
 
 .PHONY: cppcheck
-
 cppcheck: $(rofi_SOURCES)
 	cppcheck --std=c99 --platform=unix64 --enable=all -Uerror_dialog --inconclusive -I $(top_srcdir)/include/  $^
 
 .PHONY: ohcount
-
 ohcount: $(rofi_SOURCES)
 	ohcount -i $(top_srcdir)/source/ $(top_srcdir)/include/
 
@@ -621,7 +617,7 @@ coverage: coverage/index.html
 coverage-cli: coverage.info
 	lcov -l $^
 coverage.info: $(top_builddir)/test/*.gcda $(top_builddir)/source/*.gcda  $(top_builddir)/source/**/*.gcda
-	lcov --capture  --directory $(top_builddir) --output-file coverage.info
+	lcov --capture --directory $(top_builddir) --output-file coverage.info
 	lcov -r $@ /usr/include/\* -o $@
 
 coverage/index.html: coverage.info
@@ -641,5 +637,4 @@ EXTRA_DIST += \
 	subprojects/libnkutils/meson_options.txt \
 	subprojects/libgwater/xcb/meson.build \
 	meson_options.txt \
-  subprojects/xcb \
 	meson.build

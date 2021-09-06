@@ -37,12 +37,52 @@
 #include "xcb-internal.h"
 #include "rofi.h"
 #include "settings.h"
+#include "widgets/textbox.h"
+#include "rofi-icon-fetcher.h"
 
 static int       test = 0;
 
 #define TASSERT( a )        {                            \
         assert ( a );                                    \
         printf ( "Test %i passed (%s)\n", ++test, # a ); \
+}
+#include "theme.h"
+ThemeWidget *rofi_theme = NULL;
+
+uint32_t rofi_icon_fetcher_query ( const char *name, const int size )
+{
+  return 0;
+}
+uint32_t rofi_icon_fetcher_query_advanced ( const char *name, const int wsize, const int hsize )
+{
+  return 0;
+}
+
+cairo_surface_t * rofi_icon_fetcher_get ( const uint32_t uid )
+{
+  return NULL;
+}
+
+void rofi_clear_error_messages ( void )
+{
+}
+
+gboolean rofi_theme_parse_string ( const char *string )
+{
+  return FALSE;
+}
+double textbox_get_estimated_char_height ( void )
+{
+  return 12.0;
+}
+void rofi_view_get_current_monitor ( int *width, int *height )
+{
+*width = 1920;
+*height = 1080;
+}
+double textbox_get_estimated_ch ( void )
+{
+  return 9.0;
 }
 void rofi_add_error_message ( G_GNUC_UNUSED GString *msg )
 {
@@ -61,7 +101,7 @@ void display_startup_notification ( G_GNUC_UNUSED RofiHelperExecuteContext *cont
 {
 }
 
-int main ( G_GNUC_UNUSED int argc, G_GNUC_UNUSED char ** argv )
+int main ( G_GNUC_UNUSED int argc, G_GNUC_UNUSED char **argv )
 {
     if ( setlocale ( LC_ALL, "" ) == NULL ) {
         fprintf ( stderr, "Failed to set locale.\n" );
@@ -73,15 +113,15 @@ int main ( G_GNUC_UNUSED int argc, G_GNUC_UNUSED char ** argv )
     {
         const char *tmpd = g_get_tmp_dir ();
         char *path = g_build_filename (tmpd, "rofi-pid.pid", NULL);
-        TASSERT( create_pid_file ( NULL ) == -1 );
+        TASSERT ( create_pid_file ( NULL ) == -1 );
         int fd = create_pid_file ( path );
-        TASSERT( fd >= 0 );
+        TASSERT ( fd >= 0 );
         int fd2 = create_pid_file ( path );
         TASSERT ( fd2 <  0 );
 
         remove_pid_file ( fd );
         fd = create_pid_file ( path );
-        TASSERT( fd >= 0 );
+        TASSERT ( fd >= 0 );
         remove_pid_file ( fd );
         free ( path );
     }

@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -62,10 +62,12 @@ ActionBindingEntry rofi_bindings[] =
     { .id = REMOVE_TO_SOL,           .name  = "kb-remove-to-sol",           .binding = "Control+u",                            .comment = "Delete till the start of line"                                         },
     { .id = ACCEPT_ENTRY,            .name  = "kb-accept-entry",            .binding = "Control+j,Control+m,Return,KP_Enter",  .comment = "Accept entry"                                                          },
     { .id = ACCEPT_CUSTOM,           .name  = "kb-accept-custom",           .binding = "Control+Return",                       .comment = "Use entered text as command (in ssh/run modi)"                         },
+    { .id = ACCEPT_CUSTOM_ALT,       .name  = "kb-accept-custom-alt",       .binding = "Control+Shift+Return",                       .comment = "Use entered text as command (in ssh/run modi)"                         },
     { .id = ACCEPT_ALT,              .name  = "kb-accept-alt",              .binding = "Shift+Return",                         .comment = "Use alternate accept command."                                         },
     { .id = DELETE_ENTRY,            .name  = "kb-delete-entry",            .binding = "Shift+Delete",                         .comment = "Delete entry from history"                                             },
     { .id = MODE_NEXT,               .name  = "kb-mode-next",               .binding = "Shift+Right,Control+Tab",              .comment = "Switch to the next mode."                                              },
     { .id = MODE_PREVIOUS,           .name  = "kb-mode-previous",           .binding = "Shift+Left,Control+ISO_Left_Tab",      .comment = "Switch to the previous mode."                                          },
+    { .id = MODE_COMPLETE,           .name  = "kb-mode-complete",           .binding = "Control+l",                            .comment = "Start completion for mode."                                          },
     { .id = ROW_LEFT,                .name  = "kb-row-left",                .binding = "Control+Page_Up",                      .comment = "Go to the previous column"                                             },
     { .id = ROW_RIGHT,               .name  = "kb-row-right",               .binding = "Control+Page_Down",                    .comment = "Go to the next column"                                                 },
     { .id = ROW_UP,                  .name  = "kb-row-up",                  .binding = "Up,Control+p,ISO_Left_Tab",            .comment = "Select previous entry"                                                 },
@@ -144,6 +146,18 @@ static gboolean binding_trigger_action ( guint64 scope, G_GNUC_UNUSED gpointer t
 {
     return rofi_view_trigger_action ( rofi_view_get_active (), scope, GPOINTER_TO_UINT ( user_data ) );
 }
+
+guint key_binding_get_action_from_name ( const char *name )
+{
+  for ( gsize i = 0; i < G_N_ELEMENTS ( rofi_bindings ); ++i ) {
+    ActionBindingEntry *b = &rofi_bindings[i];
+    if ( g_strcmp0(b->name, name) == 0 ) {
+      return b->id;
+    }
+  }
+  return UINT32_MAX;
+}
+
 
 gboolean parse_keys_abe ( NkBindings *bindings )
 {

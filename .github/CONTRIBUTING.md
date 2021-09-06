@@ -5,7 +5,6 @@ tone will be closed without discussion. Everybody has it own way of working;
 What might be the norm for you, might not be for others. Therefore be verbose in
 your description.
 
-
 **The issue tracker is for bugs only.**
 
 This is an attempt to keep the issue tracker clean and searchable.
@@ -54,8 +53,6 @@ Issue high-jacking, e.g. adding a request/issue to an existing issue, is very
 disruptive.
 Please create a new issue, if it is similar it will be marked duplicate.
 
-
-
 # Creating a feature request
 
 
@@ -72,10 +69,10 @@ When reporting a feature request include the following information:
 * A use-case for the feature.
 
 If possible try to explain how you would expect to use feature.
-For example, should it be a configuration option or a hot-key. 
+For example, should it be a configuration option or a hot-key.
 
 Requesting a feature is no guarantee it will be added.
- 
+
 **Please do not submit reports related to wayland, see
 [here](https://github.com/DaveDavenport/rofi/wiki/Wayland) for more
 information.**

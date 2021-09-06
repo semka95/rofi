@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -71,12 +71,14 @@ typedef struct
     char                   delim;
     /** no custom */
     gboolean               no_custom;
+
+    gboolean               use_hot_keys;
 } ScriptModePrivateData;
 
 /**
  * Shared function between DMENU and Script mode.
  */
-void dmenuscript_parse_entry_extras ( G_GNUC_UNUSED Mode *sw, DmenuScriptEntry *entry, char *buffer, size_t length )
+void dmenuscript_parse_entry_extras ( G_GNUC_UNUSED Mode *sw, DmenuScriptEntry *entry, char *buffer, G_GNUC_UNUSED size_t length )
 {
     gchar **extras = g_strsplit ( buffer, "\x1f", -1 );
     gchar **extra;
@@ -142,6 +144,9 @@ static void parse_header_entry ( Mode *sw, char *line, ssize_t length )
         }
         else if ( strcasecmp ( line, "no-custom" ) == 0 ) {
             pd->no_custom = ( strcasecmp ( value, "true" ) == 0 );
+        }
+        else if ( strcasecmp ( line, "use-hot-keys" ) == 0 ) {
+            pd->use_hot_keys = ( strcasecmp ( value, "true" ) == 0 );
         }
     }
 }
@@ -213,7 +218,7 @@ static DmenuScriptEntry *execute_executor ( Mode *sw, char *arg, unsigned int *l
                     retv[( *length )].info           = NULL;
                     retv[( *length )].icon_fetch_uid = 0;
                     retv[( *length )].nonselectable  = FALSE;
-                    if ( buf_length > 0 && ( read_length > (ssize_t) buf_length )  ) {
+                    if ( buf_length > 0 && ( read_length > (ssize_t) buf_length ) ) {
                         dmenuscript_parse_entry_extras ( sw, &( retv[( *length )] ), buffer + buf_length, read_length - buf_length );
                     }
                     retv[( *length ) + 1].entry = NULL;
@@ -279,18 +284,23 @@ static ModeMode script_mode_result ( Mode *sw, int mretv, char **input, unsigned
     unsigned int          new_length = 0;
 
     if ( ( mretv & MENU_CUSTOM_COMMAND ) ) {
-        //retv = 1+( mretv & MENU_LOWER_MASK );
-        script_mode_reset_highlight ( sw );
-        if ( selected_line != UINT32_MAX ) {
-            new_list = execute_executor ( sw, rmpd->cmd_list[selected_line].entry, &new_length, 10 + ( mretv & MENU_LOWER_MASK ), &( rmpd->cmd_list[selected_line] ) );
-        }
-        else {
-            if ( rmpd->no_custom == FALSE ) {
-                new_list = execute_executor ( sw, *input, &new_length, 10 + ( mretv & MENU_LOWER_MASK ), NULL );
+        if ( rmpd->use_hot_keys ) {
+            script_mode_reset_highlight ( sw );
+            if ( selected_line != UINT32_MAX ) {
+                new_list = execute_executor ( sw, rmpd->cmd_list[selected_line].entry, &new_length, 10 + ( mretv & MENU_LOWER_MASK ), &( rmpd->cmd_list[selected_line] ) );
             }
             else {
-                return RELOAD_DIALOG;
+                if ( rmpd->no_custom == FALSE ) {
+                    new_list = execute_executor ( sw, *input, &new_length, 10 + ( mretv & MENU_LOWER_MASK ), NULL );
+                }
+                else {
+                    return RELOAD_DIALOG;
+                }
             }
+        }
+        else {
+            retv = ( mretv & MENU_LOWER_MASK );
+            return retv;
         }
     }
     else if ( ( mretv & MENU_OK ) && rmpd->cmd_list[selected_line].entry != NULL ) {

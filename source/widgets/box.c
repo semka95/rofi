@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -49,7 +49,7 @@ struct _box
     GList           *children;
 };
 
-static void box_update ( widget *wid  );
+static void box_update ( widget *wid );
 
 static int box_get_desired_width  ( widget *wid )
 {
@@ -183,7 +183,7 @@ static void vert_calculate_size ( box *b )
             }
             else {
                 widget_move ( child, widget_padding_get_left ( WIDGET ( b ) ), top );
-                top += widget_get_height (  child );
+                top += widget_get_height ( child );
                 top += spacing;
             }
         }
@@ -236,7 +236,7 @@ static void hori_calculate_size ( box *b )
         }
         for ( GList *iter = g_list_first ( b->children ); iter != NULL; iter = g_list_next ( iter ) ) {
             widget * child = (widget *) iter->data;
-            if ( child->enabled == FALSE  ) {
+            if ( child->enabled == FALSE ) {
                 continue;
             }
             if ( child->expand == TRUE ) {
@@ -251,7 +251,7 @@ static void hori_calculate_size ( box *b )
             }
             else {
                 widget_move ( child, left, widget_padding_get_top ( WIDGET ( b ) ) );
-                left += widget_get_width (  child );
+                left += widget_get_width ( child );
                 left += spacing;
             }
         }
@@ -361,7 +361,7 @@ box * box_create ( widget *parent, const char *name, RofiOrientation type )
     return b;
 }
 
-static void box_update ( widget *wid  )
+static void box_update ( widget *wid )
 {
     box *b = (box *) wid;
     switch ( b->type )

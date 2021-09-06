@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -24,7 +24,10 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  */
+/** Log domain for this module */
+#define G_LOG_DOMAIN    "XrmOptions"
 
+#include <ctype.h>
 #include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +35,6 @@
 #include <unistd.h>
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
-#include <xcb/xcb_xrm.h>
 #include <glib.h>
 #include "xcb.h"
 #include "xcb-internal.h"
@@ -42,10 +44,13 @@
 #include "helper.h"
 #include "rofi-types.h"
 
+
+ThemeWidget *rofi_configuration = NULL;
+
+
 /** Different sources of configuration. */
 const char * const ConfigSourceStr[] = {
     "Default",
-    "XResources",
     "File",
     "Rasi File",
     "Commandline",
@@ -54,10 +59,9 @@ const char * const ConfigSourceStr[] = {
 enum ConfigSource
 {
     CONFIG_DEFAULT    = 0,
-    CONFIG_XRESOURCES = 1,
-    CONFIG_FILE       = 2,
-    CONFIG_FILE_THEME = 3,
-    CONFIG_CMDLINE    = 4
+    CONFIG_FILE       = 1,
+    CONFIG_FILE_THEME = 2,
+    CONFIG_CMDLINE    = 3
 };
 
 typedef struct
@@ -85,25 +89,10 @@ static XrmOption xrmOptions[] = {
       "", CONFIG_DEFAULT },
     { xrm_String,  "modi",                      { .str   = &config.modi                                 }, NULL,
       "Enabled modi", CONFIG_DEFAULT },
-    { xrm_SNumber, "width",                     { .snum  = &config.menu_width                           }, NULL,
-      "Window width", CONFIG_DEFAULT },
-    { xrm_Number,  "lines",                     { .num   = &config.menu_lines                           }, NULL,
-      "Number of lines", CONFIG_DEFAULT },
-    { xrm_Number,  "columns",                   { .num   = &config.menu_columns                         }, NULL,
-      "Number of columns", CONFIG_DEFAULT },
-
     { xrm_String,  "font",                      { .str   = &config.menu_font                            }, NULL,
       "Font to use", CONFIG_DEFAULT },
-    { xrm_Number,  "borderwidth",               { .num   = &config.menu_bw                              }, NULL,
-      "", CONFIG_DEFAULT },
-    { xrm_Number,  "bw",                        { .num   = &config.menu_bw                              }, NULL,
-      "Border width", CONFIG_DEFAULT },
-
     { xrm_Number,  "location",                  { .num   = &config.location                             }, NULL,
       "Location on screen", CONFIG_DEFAULT },
-
-    { xrm_Number,  "padding",                   { .num   = &config.padding                              }, NULL,
-      "Padding", CONFIG_DEFAULT },
     { xrm_SNumber, "yoffset",                   { .snum  = &config.y_offset                             }, NULL,
       "Y-offset relative to location", CONFIG_DEFAULT },
     { xrm_SNumber, "xoffset",                   { .snum  = &config.x_offset                             }, NULL,
@@ -142,7 +131,7 @@ static XrmOption xrmOptions[] = {
     { xrm_String,  "drun-display-format",       { .str   = &config.drun_display_format                  }, NULL,
       "DRUN format string. (Supports: generic,name,comment,exec,categories)", CONFIG_DEFAULT },
     { xrm_String,  "drun-url-launcher",         { .str   = &config.drun_url_launcher                    }, NULL,
-      "Command to open an Desktop Entry that is a Link.", CONFIG_DEFAULT },
+      "Command to open a Desktop Entry that is a Link.", CONFIG_DEFAULT },
 
     { xrm_Boolean, "disable-history",           { .num   = &config.disable_history                      }, NULL,
       "Disable history in run/ssh", CONFIG_DEFAULT },
@@ -158,6 +147,8 @@ static XrmOption xrmOptions[] = {
       "Cycle through the results list", CONFIG_DEFAULT },
     { xrm_Boolean, "sidebar-mode",              { .num   = &config.sidebar_mode                         }, NULL,
       "Enable sidebar-mode", CONFIG_DEFAULT },
+    { xrm_Boolean, "hover-select",              { .snum  = &config.hover_select                         }, NULL,
+      "Enable hover-select", CONFIG_DEFAULT },
     { xrm_SNumber, "eh",                        { .snum  = &config.element_height                       }, NULL,
       "Row height (in chars)", CONFIG_DEFAULT },
     { xrm_Boolean, "auto-select",               { .num   = &config.auto_select                          }, NULL,
@@ -169,7 +160,7 @@ static XrmOption xrmOptions[] = {
     { xrm_String,  "combi-modi",                { .str   = &config.combi_modi                           }, NULL,
       "Set the modi to combine in combi mode", CONFIG_DEFAULT },
     { xrm_String,  "matching",                  { .str   = &config.matching                             }, NULL,
-      "Set the matching algorithm. (normal, regex, glob, fuzzy)", CONFIG_DEFAULT },
+      "Set the matching algorithm. (normal, regex, glob, fuzzy, prefix)", CONFIG_DEFAULT },
     { xrm_Boolean, "tokenize",                  { .num   = &config.tokenize                             }, NULL,
       "Tokenize input string", CONFIG_DEFAULT },
     { xrm_String,  "monitor",                   { .str   = &config.monitor                              }, NULL,
@@ -177,48 +168,22 @@ static XrmOption xrmOptions[] = {
     /* Alias for dmenu compatibility. */
     { xrm_String,  "m",                         { .str   = &config.monitor                              }, NULL,
       "Monitor id to show on", CONFIG_DEFAULT },
-    { xrm_Number,  "line-margin",               { .num   = &config.line_margin                          }, NULL,
-      "Margin between rows *DEPRECATED*", CONFIG_DEFAULT },
-    { xrm_Number,  "line-padding",              { .num   = &config.line_padding                         }, NULL,
-      "Padding within rows *DEPRECATED*", CONFIG_DEFAULT },
     { xrm_String,  "filter",                    { .str   = &config.filter                               }, NULL,
       "Pre-set filter", CONFIG_DEFAULT },
-    { xrm_String,  "separator-style",           { .str   = &config.separator_style                      }, NULL,
-      "Separator style (none, dash, solid) *DEPRECATED*", CONFIG_DEFAULT },
-    { xrm_Boolean, "hide-scrollbar",            { .num   = &config.hide_scrollbar                       }, NULL,
-      "Hide scroll-bar *DEPRECATED*", CONFIG_DEFAULT },
-    { xrm_Boolean, "fullscreen",                { .num   = &config.fullscreen                           }, NULL,
-      "Fullscreen", CONFIG_DEFAULT },
-    { xrm_Boolean, "fake-transparency",         { .num   = &config.fake_transparency                    }, NULL,
-      "Fake transparency *DEPRECATED*", CONFIG_DEFAULT },
     { xrm_SNumber, "dpi",                       { .snum  = &config.dpi                                  }, NULL,
       "DPI", CONFIG_DEFAULT },
     { xrm_Number,  "threads",                   { .num   = &config.threads                              }, NULL,
       "Threads to use for string matching", CONFIG_DEFAULT },
-    { xrm_Number,  "scrollbar-width",           { .num   = &config.scrollbar_width                      }, NULL,
-      "Scrollbar width *DEPRECATED*", CONFIG_DEFAULT },
     { xrm_Number,  "scroll-method",             { .num   = &config.scroll_method                        }, NULL,
       "Scrolling method. (0: Page, 1: Centered)", CONFIG_DEFAULT },
-    { xrm_String,  "fake-background",           { .str   = &config.fake_background                      }, NULL,
-      "Background to use for fake transparency. (background or screenshot) *DEPRECATED*", CONFIG_DEFAULT },
     { xrm_String,  "window-format",             { .str   = &config.window_format                        }, NULL,
       "Window Format. w (desktop name), t (title), n (name), r (role), c (class)", CONFIG_DEFAULT },
     { xrm_Boolean, "click-to-exit",             { .snum  = &config.click_to_exit                        }, NULL,
       "Click outside the window to exit", CONFIG_DEFAULT },
-    { xrm_Boolean, "show-match",                { .snum  = &config.show_match                           }, NULL,
-      "Indicate how it match by underlining it.", CONFIG_DEFAULT },
     { xrm_String,  "theme",                     { .str   = &config.theme                                }, NULL,
       "New style theme file", CONFIG_DEFAULT },
-    { xrm_String,  "color-normal",              { .str   = &config.color_normal                         }, NULL,
-      "Color scheme for normal row", CONFIG_DEFAULT },
-    { xrm_String,  "color-urgent",              { .str   = &config.color_urgent                         }, NULL,
-      "Color scheme for urgent row", CONFIG_DEFAULT },
-    { xrm_String,  "color-active",              { .str   = &config.color_active                         }, NULL,
-      "Color scheme for active row", CONFIG_DEFAULT },
-    { xrm_String,  "color-window",              { .str   = &config.color_window                         }, NULL,
-      "Color scheme window", CONFIG_DEFAULT },
     { xrm_Number,  "max-history-size",          { .num   = &config.max_history_size                     }, NULL,
-      "Max history size (WARNING: can cause slowdowns when set to high).", CONFIG_DEFAULT },
+      "Max history size (WARNING: can cause slowdowns when set too high).", CONFIG_DEFAULT },
     { xrm_Boolean, "combi-hide-mode-prefix",    { .snum  = &config.combi_hide_mode_prefix               }, NULL,
       "Hide the prefix mode prefix on the combi view.", CONFIG_DEFAULT },
     { xrm_Char,    "matching-negate-char",      { .charc = &config.matching_negate_char                 }, NULL,
@@ -232,13 +197,23 @@ static XrmOption xrmOptions[] = {
     { xrm_Boolean, "drun-reload-desktop-cache", { .snum  = &config.drun_reload_desktop_cache            }, NULL,
       "DRUN: If enabled, reload the cache with desktop file content.", CONFIG_DEFAULT },
     { xrm_Boolean, "normalize-match",           { .snum  = &config.normalize_match                      }, NULL,
-      "Normalize string when matching (implies -no-show-match).", CONFIG_DEFAULT },
+      "Normalize string when matching (disables match highlighting).", CONFIG_DEFAULT },
+    { xrm_Boolean, "steal-focus",               { .snum  = &config.steal_focus                          }, NULL,
+      "Steal focus on launch and restore to window that had it on rofi start on close .", CONFIG_DEFAULT },
+    { xrm_String, "application-fallback-icon",              { .str  = &(config.application_fallback_icon) }, NULL,
+      "Fallback icon to use when the application icon is not found in run/drun.", CONFIG_DEFAULT },
 };
 
 /** Dynamic array of extra options */
 XrmOption    *extra_options = NULL;
 /** Number of entries in extra options array */
 unsigned int num_extra_options = 0;
+
+/** This is a big hack, we need to fix this. */
+GList *extra_parsed_options = NULL;
+
+
+static gboolean __config_parser_set_property ( XrmOption *option, const Property *p, char **error );
 
 void config_parser_add_option ( XrmOptionType type, const char *key, void **value, const char *comment )
 {
@@ -259,104 +234,21 @@ void config_parser_add_option ( XrmOptionType type, const char *key, void **valu
         break;
     }
 
+
+    for ( GList *iter = g_list_first ( extra_parsed_options) ; iter != NULL; iter = g_list_next ( iter ) ) {
+      if ( g_strcmp0(((Property *)(iter->data))->name, key ) == 0 ) {
+        char *error = NULL;
+        g_debug("Setting property from backup list: %s", key);
+        if ( __config_parser_set_property ( &(extra_options[num_extra_options]), (Property *)(iter->data), &error ) ) {
+          g_debug("Failed to set property on custom entry: %s", key);
+          g_free( error );
+        }
+        num_extra_options++;
+        return;
+      }
+    }
     num_extra_options++;
-}
 
-static void config_parser_set ( XrmOption *option, char *xrmValue, enum ConfigSource source )
-{
-    switch ( option->type )
-    {
-    case xrm_String:
-        if ( ( option )->mem != NULL ) {
-            g_free ( option->mem );
-            option->mem = NULL;
-        }
-        *( option->value.str ) = g_strchomp ( g_strdup ( xrmValue ) );
-
-        // Memory
-        ( option )->mem = *( option->value.str );
-        break;
-    case xrm_Number:
-        *( option->value.num ) = (unsigned int) g_ascii_strtoull ( xrmValue, NULL, 10 );
-        break;
-    case xrm_SNumber:
-        *( option->value.snum ) = (int) g_ascii_strtoll ( xrmValue, NULL, 10 );
-        break;
-    case xrm_Boolean:
-        if ( strlen ( xrmValue ) > 0 &&
-             g_ascii_strcasecmp ( xrmValue, "true" ) == 0 ) {
-            *( option->value.num ) = TRUE;
-        }
-        else{
-            *( option->value.num ) = FALSE;
-        }
-        break;
-    case xrm_Char:
-        *( option->value.charc ) = helper_parse_char ( xrmValue );
-        break;
-    }
-    option->source = source;
-}
-
-static void __config_parse_xresource_options ( xcb_xrm_database_t *xDB, enum ConfigSource source )
-{
-    const char * namePrefix = "rofi";
-
-    for ( unsigned int i = 0; i < sizeof ( xrmOptions ) / sizeof ( XrmOption ); ++i ) {
-        char *name = g_strdup_printf ( "%s.%s", namePrefix, xrmOptions[i].name );
-
-        char *xrmValue = NULL;
-        if ( xcb_xrm_resource_get_string ( xDB, name, NULL, &xrmValue ) == 0 ) {
-            config_parser_set ( &( xrmOptions[i] ), xrmValue, source );
-        }
-        if ( xrmValue ) {
-            free ( xrmValue );
-        }
-
-        g_free ( name );
-    }
-}
-static void __config_parse_xresource_options_dynamic ( xcb_xrm_database_t *xDB, enum ConfigSource source )
-{
-    const char * namePrefix = "rofi";
-
-    for ( unsigned int i = 0; i < num_extra_options; ++i ) {
-        char *name;
-
-        name = g_strdup_printf ( "%s.%s", namePrefix, extra_options[i].name );
-        char *xrmValue = NULL;
-        if ( xcb_xrm_resource_get_string ( xDB, name, NULL, &xrmValue ) == 0 ) {
-            config_parser_set ( &( extra_options[i] ), xrmValue, source );
-        }
-        if ( xrmValue ) {
-            free ( xrmValue );
-        }
-
-        g_free ( name );
-    }
-}
-void config_parse_xresource_options ( xcb_stuff *xcb )
-{
-    xcb_xrm_database_t *xDB = xcb_xrm_database_from_default ( xcb->connection );
-    if ( xDB ) {
-        __config_parse_xresource_options ( xDB, CONFIG_XRESOURCES );
-        __config_parse_xresource_options_dynamic ( xDB, CONFIG_XRESOURCES );
-        xcb_xrm_database_free ( xDB );
-    }
-}
-void config_parse_xresource_options_file ( const char *filename )
-{
-    if ( !filename ) {
-        return;
-    }
-    // Map Xresource entries to rofi config options.
-    xcb_xrm_database_t *xDB = xcb_xrm_database_from_file ( filename );
-    if ( xDB == NULL ) {
-        return;
-    }
-    __config_parse_xresource_options ( xDB, CONFIG_FILE );
-    __config_parse_xresource_options_dynamic ( xDB, CONFIG_FILE );
-    xcb_xrm_database_free ( xDB );
 }
 
 /**
@@ -374,12 +266,12 @@ static void config_parse_cmd_option ( XrmOption *option )
         }
         break;
     case xrm_SNumber:
-        if ( find_arg_int (  key, option->value.snum ) == TRUE ) {
+        if ( find_arg_int ( key, option->value.snum ) == TRUE ) {
             option->source = CONFIG_CMDLINE;
         }
         break;
     case xrm_String:
-        if ( find_arg_str (  key, option->value.str ) == TRUE ) {
+        if ( find_arg_str ( key, option->value.str ) == TRUE ) {
             if ( option->mem != NULL ) {
                 g_free ( option->mem );
                 option->mem = NULL;
@@ -388,21 +280,21 @@ static void config_parse_cmd_option ( XrmOption *option )
         }
         break;
     case xrm_Boolean:
-        if ( find_arg (  key ) >= 0 ) {
+        if ( find_arg ( key ) >= 0 ) {
             *( option->value.num ) = TRUE;
             option->source         = CONFIG_CMDLINE;
         }
         else {
             g_free ( key );
             key = g_strdup_printf ( "-no-%s", option->name );
-            if ( find_arg (  key ) >= 0 ) {
+            if ( find_arg ( key ) >= 0 ) {
                 *( option->value.num ) = FALSE;
                 option->source         = CONFIG_CMDLINE;
             }
         }
         break;
     case xrm_Char:
-        if ( find_arg_char (  key, option->value.charc ) == TRUE ) {
+        if ( find_arg_char ( key, option->value.charc ) == TRUE ) {
             option->source = CONFIG_CMDLINE;
         }
         break;
@@ -410,6 +302,8 @@ static void config_parse_cmd_option ( XrmOption *option )
         break;
     }
     g_free ( key );
+
+
 }
 
 void config_parse_cmd_options ( void )
@@ -420,11 +314,57 @@ void config_parse_cmd_options ( void )
     }
     for ( unsigned int i = 0; i < num_extra_options; ++i ) {
         XrmOption *op = &( extra_options[i] );
-        config_parse_cmd_option ( op  );
+        config_parse_cmd_option ( op );
+    }
+
+
+    /** copy of the argc for use in commandline argument parser. */
+    extern int        stored_argc;
+    /** copy of the argv pointer for use in the commandline argument parser */
+    extern char       **stored_argv;
+    for ( int in = 1; in < (stored_argc-1) ; in ++ ) {
+        if ( stored_argv[in][0] == '-' ) {
+            /** TODO: This is a hack, and should be fixed in a nicer way. */
+            char **tokens = g_strsplit(stored_argv[in], "-", 3);
+            int count = 1;
+            for ( int j = 1; tokens && tokens[j]; j++ ) {
+                count++;
+            }
+            if ( count > 2 && g_strcmp0(tokens[1], "no") != 0 ) {
+                GString *str = g_string_new("configuration { ");
+                for ( int j = 1; j < (count-1); j++ ) {
+                    g_string_append_printf(str, "%s { ", tokens[j]);
+                }
+                g_string_append_printf ( str, "%s: %s;", tokens[count-1], stored_argv[in+1]);
+                for ( int j = 0; j < (count-1); j++ ) {
+                    g_string_append(str, " } ");
+                }
+                if ( rofi_theme_parse_string(str->str) == 1 ) {
+                    /** Failed to parse, try again as string. */
+                    rofi_clear_error_messages();
+                    g_string_assign ( str, "configuration { ");
+                    for ( int j = 1; j < (count-1); j++ ) {
+                        g_string_append_printf(str, "%s { ", tokens[j]);
+                    }
+                    char *esc = g_strescape(stored_argv[in+1], NULL);
+                    g_string_append_printf ( str, "%s: \"%s\";", tokens[count-1], esc);
+                    g_free(esc);
+                    for ( int j = 0; j < (count-1); j++ ) {
+                        g_string_append(str, " } ");
+                    }
+                    if ( rofi_theme_parse_string(str->str) == 1 ) {
+                        printf("failed\n");
+                    }
+                }
+                g_string_free(str,TRUE);
+                in++;
+            }
+            g_strfreev(tokens);
+        }
     }
 }
 
-static gboolean __config_parser_set_property ( XrmOption *option, const Property *p, char **error  )
+static gboolean __config_parser_set_property ( XrmOption *option, const Property *p, char **error )
 {
     if ( option->type == xrm_String ) {
         if ( p->type != P_STRING && p->type != P_LIST ) {
@@ -497,6 +437,7 @@ static gboolean __config_parser_set_property ( XrmOption *option, const Property
     return FALSE;
 }
 
+
 gboolean config_parse_set_property ( const Property *p, char **error )
 {
     for ( unsigned int i = 0; i < sizeof ( xrmOptions ) / sizeof ( XrmOption ); ++i ) {
@@ -512,6 +453,17 @@ gboolean config_parse_set_property ( const Property *p, char **error )
         }
     }
     *error = g_strdup_printf ( "Option: %s is not found.", p->name );
+
+    for ( GList *iter = g_list_first ( extra_parsed_options) ; iter != NULL; iter = g_list_next ( iter ) ) {
+      if ( g_strcmp0(((Property *)(iter->data))->name, p->name ) == 0 ) {
+        rofi_theme_property_free ( (Property *)(iter->data));
+        iter->data = (void *)rofi_theme_property_copy ( p ) ;
+        return TRUE;
+      }
+    }
+    g_debug("Adding option: %s to backup list.", p->name);
+    extra_parsed_options = g_list_append ( extra_parsed_options , rofi_theme_property_copy ( p ) );
+
     return TRUE;
 }
 
@@ -532,63 +484,7 @@ void config_xresource_free ( void )
     if ( extra_options != NULL ) {
         g_free ( extra_options );
     }
-}
-
-static void xresource_dump_entry ( const char *namePrefix, XrmOption *option )
-{
-    printf ( "! \"%s\" ", option->comment );
-    printf ( "Set from: %s\n", ConfigSourceStr[option->source] );
-    if ( option->source == CONFIG_DEFAULT ) {
-        printf ( "! " );
-    }
-    printf ( "%s.%s: %*s", namePrefix, option->name,
-             (int) ( 30 - strlen ( option->name ) ), "" );
-    switch ( option->type )
-    {
-    case xrm_Number:
-        printf ( "%u", *( option->value.num ) );
-        break;
-    case xrm_SNumber:
-        printf ( "%i", *( option->value.snum ) );
-        break;
-    case xrm_String:
-        if ( ( *( option->value.str ) ) != NULL ) {
-            printf ( "%s", *( option->value.str ) );
-        }
-        break;
-    case xrm_Boolean:
-        printf ( "%s", ( *( option->value.num ) == TRUE ) ? "true" : "false" );
-        break;
-    case xrm_Char:
-        if ( *( option->value.charc ) > 32 && *( option->value.charc ) < 127 ) {
-            printf ( "%c", *( option->value.charc ) );
-        }
-        else {
-            printf ( "\\x%02X", *( option->value.charc ) );
-        }
-        break;
-    default:
-        break;
-    }
-    printf ( "\n" );
-}
-
-void config_parse_xresource_dump ( void )
-{
-    const char   * namePrefix = "rofi";
-    unsigned int entries      = sizeof ( xrmOptions ) / sizeof ( *xrmOptions );
-    for ( unsigned int i = 0; i < entries; ++i ) {
-        // Skip duplicates.
-        if ( ( i + 1 ) < entries ) {
-            if ( xrmOptions[i].value.str == xrmOptions[i + 1].value.str ) {
-                continue;
-            }
-        }
-        xresource_dump_entry ( namePrefix, &( xrmOptions[i] ) );
-    }
-    for ( unsigned int i = 0; i < num_extra_options; i++ ) {
-        xresource_dump_entry ( namePrefix, &( extra_options[i] ) );
-    }
+    g_list_free_full ( extra_parsed_options, (GDestroyNotify)rofi_theme_property_free );
 }
 
 static void config_parse_dump_config_option ( FILE *out, XrmOption *option )
@@ -655,6 +551,10 @@ void config_parse_dump_config_rasi_format ( FILE *out, gboolean changes )
         if ( !changes || extra_options[i].source != CONFIG_DEFAULT ) {
             config_parse_dump_config_option ( out, &( extra_options[i] ) );
         }
+    }
+
+    for ( unsigned int index = 0; index < rofi_configuration->num_widgets; index ++ ) {
+        rofi_theme_print_index ( rofi_configuration->widgets[index], 2 );
     }
 
     fprintf ( out, "}\n" );

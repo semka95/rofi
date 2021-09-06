@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -73,7 +73,7 @@ struct RofiViewState
     /** #textbox containing the message entry */
     textbox          *mesg_tb;
 
-    /** Array with the levenshtein distance for each eleemnt. */
+    /** Array with the levenshtein distance for each element. */
     int              *distance;
     /** Array with the translation between the filtered and unfiltered list. */
     unsigned int     *line_map;
@@ -142,7 +142,7 @@ struct RofiViewState
         int    x;
         /** Y position */
         int    y;
-        /** Widget being targetted. */
+        /** Widget being targeted. */
         widget *motion_target;
     }                mouse;
 
@@ -166,6 +166,8 @@ typedef struct _view_proxy
     void ( *calculate_window_width )( RofiViewState *state );
     int ( *calculate_window_height )( RofiViewState *state );
     void ( *window_update_size )( RofiViewState *state );
+    void ( *set_cursor )( RofiCursorType type );
+    void ( *ping_mouse )( RofiViewState *state );
 
     void ( *cleanup )( void );
     void ( *hide )( void );
@@ -193,6 +195,8 @@ struct _rofi_view_cache_state
     MenuFlags    flags;
     /** List of stacked views */
     GQueue       views;
+    /** User timeout */
+    guint        user_timeout;
 };
 extern struct _rofi_view_cache_state CacheState;
 

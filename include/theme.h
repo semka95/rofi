@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -88,6 +88,13 @@ typedef struct ThemeWidget
 extern ThemeWidget *rofi_theme;
 
 /**
+ * Used to store config options.
+ */
+extern ThemeWidget *rofi_theme;
+
+extern ThemeWidget *rofi_configuration;
+
+/**
  * @param base Handle to the current level in the theme.
  * @param name Name of the new element.
  *
@@ -103,6 +110,7 @@ ThemeWidget *rofi_theme_find_or_create_name ( ThemeWidget *base, const char *nam
  * Print out the widget to the commandline.
  */
 void rofi_theme_print ( ThemeWidget *widget );
+void rofi_theme_print_index ( ThemeWidget *widget, int index );
 
 /**
  * @param type The type of the property to create.
@@ -125,7 +133,7 @@ void rofi_theme_property_free ( Property *p );
  *
  * @returns a copy of p
  */
-Property* rofi_theme_property_copy ( Property *p );
+Property* rofi_theme_property_copy ( const Property *p );
 /**
  * @param widget
  *
@@ -183,7 +191,7 @@ RofiDistance rofi_theme_get_distance ( const widget *widget, const char *propert
  *
  * @returns The integer value of this property for this widget.
  */
-int rofi_theme_get_integer   (  const widget *widget, const char *property, int def );
+int rofi_theme_get_integer ( const widget *widget, const char *property, int def );
 
 /**
  * @param widget   The widget to query
@@ -205,7 +213,7 @@ int rofi_theme_get_position ( const widget *widget, const char *property, int de
  *
  * @returns The boolean value of this property for this widget.
  */
-int rofi_theme_get_boolean   (  const widget *widget, const char *property, int def );
+int rofi_theme_get_boolean ( const widget *widget, const char *property, int def );
 
 /**
  * @param widget   The widget to query
@@ -217,6 +225,17 @@ int rofi_theme_get_boolean   (  const widget *widget, const char *property, int 
  * @returns The orientation of this property for this widget or %def not found.
  */
 RofiOrientation rofi_theme_get_orientation ( const widget *widget, const char *property, RofiOrientation def );
+
+/**
+ * @param widget   The widget to query
+ * @param property The property to query.
+ * @param def      The default value.
+ *
+ * Obtain the cursor indicated by %property of the widget.
+ *
+ * @returns The cursor for this widget or %def if not found.
+ */
+RofiCursorType rofi_theme_get_cursor_type ( const widget *widget, const char *property, RofiCursorType def );
 /**
  * @param widget   The widget to query
  * @param property The property to query.
@@ -226,7 +245,7 @@ RofiOrientation rofi_theme_get_orientation ( const widget *widget, const char *p
  *
  * @returns The string value of this property for this widget.
  */
-const char *rofi_theme_get_string  (  const widget *widget, const char *property, const char *def );
+const char *rofi_theme_get_string ( const widget *widget, const char *property, const char *def );
 
 /**
  * @param widget   The widget to query
@@ -237,7 +256,7 @@ const char *rofi_theme_get_string  (  const widget *widget, const char *property
  *
  * @returns The double value of this property for this widget.
  */
-double rofi_theme_get_double (  const widget *widget, const char *property, double def );
+double rofi_theme_get_double ( const widget *widget, const char *property, double def );
 
 /**
  * @param widget   The widget to query
@@ -248,6 +267,17 @@ double rofi_theme_get_double (  const widget *widget, const char *property, doub
  *
  */
 void rofi_theme_get_color ( const widget *widget, const char *property, cairo_t *d );
+
+/**
+ * @param widget   The widget to query
+ * @param property The property to query.
+ * @param d        The drawable to apply color.
+ *
+ * Obtain the image of the widget and applies this to the drawable d.
+ *
+ * @return true if image is set.
+ */
+gboolean rofi_theme_get_image ( const widget *widget, const char *property, cairo_t *d );
 
 /**
  * @param widget   The widget to query
@@ -310,6 +340,7 @@ void distance_get_linestyle ( RofiDistance d, cairo_t *draw );
  * @returns the ThemeWidget if found, otherwise NULL.
  */
 ThemeWidget *rofi_theme_find_widget ( const char *name, const char *state, gboolean exact );
+ThemeWidget *rofi_config_find_widget ( const char *name, const char *state, gboolean exact );
 
 /**
  * @param widget The widget to find the property on.
@@ -343,19 +374,7 @@ gboolean rofi_theme_is_empty ( void );
  * Reset the current theme.
  */
 void rofi_theme_reset ( void );
-#ifdef THEME_CONVERTER
-/**
- * Convert old theme colors into default one.
- */
-void rofi_theme_convert_old ( void );
-#endif
 
-/**
- * @param file File name passed to option.
- *
- * @returns path to theme or copy of filename if not found.
- */
-char *helper_get_theme_path ( const char *file );
 
 /**
  * @param file File name to prepare.
@@ -386,5 +405,19 @@ void rofi_theme_parse_merge_widgets ( ThemeWidget *parent, ThemeWidget *child );
  * Returns the media type described by type.
  */
 ThemeMediaType rofi_theme_parse_media_type ( const char *type );
-RofiDistance rofi_theme_property_copy_distance  ( RofiDistance const distance );
+
+/**
+ * @param distance The distance object to copy.
+ *
+ * @returns a copy of the distance.
+ */
+RofiDistance rofi_theme_property_copy_distance ( RofiDistance const distance );
+
+/**
+ * @param filename The file to validate.
+ *
+ * @returns the program exit code.
+ */
+int rofi_theme_rasi_validate ( const char *filename );
+
 #endif

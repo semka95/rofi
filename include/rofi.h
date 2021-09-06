@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -70,6 +70,7 @@ const Mode * rofi_get_mode ( unsigned int index );
  */
 void rofi_add_error_message ( GString *str );
 
+void rofi_clear_error_messages ( void );
 /**
  * @param code the code to return
  *
@@ -101,7 +102,7 @@ Mode * rofi_collect_modi_search ( const char *name );
 #define ERROR_MSG( a )    a "\n"                                       \
     "If you suspect this is caused by a bug in rofi,\n"                \
     "please report the following information to rofi's github page:\n" \
-    " * The generated commandline output when the error occored.\n"    \
+    " * The generated commandline output when the error occurred.\n"   \
     " * Output of -dump-xresource\n"                                   \
     " * Steps to reproduce\n"                                          \
     " * The version of rofi you are running\n\n"                       \

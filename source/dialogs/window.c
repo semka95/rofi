@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -58,6 +58,7 @@
 #include "timings.h"
 
 #include "rofi-icon-fetcher.h"
+#include "mode-private.h"
 
 #define WINLIST             32
 
@@ -109,6 +110,7 @@ typedef struct
     long                              hint_flags;
     uint32_t                          wmdesktop;
     char                              *wmdesktopstr;
+    unsigned int                      wmdesktopstr_len;
     cairo_surface_t                   *icon;
     gboolean                          icon_checked;
     uint32_t                          icon_fetch_uid;
@@ -180,20 +182,27 @@ static int winlist_append ( winlist *l, xcb_window_t w, client *d )
     return l->len - 1;
 }
 
+static void client_free ( client *c )
+{
+  if ( c == NULL ) {
+    return;
+  }
+  if ( c->icon ) {
+    cairo_surface_destroy ( c->icon );
+  }
+  g_free ( c->title );
+  g_free ( c->class );
+  g_free ( c->name );
+  g_free ( c->role );
+  g_free ( c->wmdesktopstr );
+}
 static void winlist_empty ( winlist *l )
 {
     while ( l->len > 0 ) {
         client *c = l->data[--l->len];
         if ( c != NULL ) {
-            if ( c->icon ) {
-                cairo_surface_destroy ( c->icon );
-            }
-            g_free ( c->title );
-            g_free ( c->class );
-            g_free ( c->name );
-            g_free ( c->role );
-            g_free ( c->wmdesktopstr );
-            g_free ( c );
+          client_free ( c );
+          g_free ( c );
         }
     }
 }
@@ -332,20 +341,24 @@ static client* window_client ( ModeModePrivateData *pd, xcb_window_t win )
         xcb_ewmh_get_atoms_reply_wipe ( &states );
     }
 
-    c->title = window_get_text_prop ( c->window, xcb->ewmh._NET_WM_NAME );
-    if ( c->title == NULL ) {
-        c->title = window_get_text_prop ( c->window, XCB_ATOM_WM_NAME );
+    char *tmp_title = window_get_text_prop ( c->window, xcb->ewmh._NET_WM_NAME );
+    if ( tmp_title == NULL ) {
+        tmp_title = window_get_text_prop ( c->window, XCB_ATOM_WM_NAME );
     }
+    c->title      = g_markup_escape_text ( tmp_title, -1 );
     pd->title_len = MAX ( c->title ? g_utf8_strlen ( c->title, -1 ) : 0, pd->title_len );
+    g_free ( tmp_title );
 
-    c->role      = window_get_text_prop ( c->window, netatoms[WM_WINDOW_ROLE] );
+    char *tmp_role = window_get_text_prop ( c->window, netatoms[WM_WINDOW_ROLE] );
+    c->role      = g_markup_escape_text ( tmp_role ? tmp_role : "", -1 );
     pd->role_len = MAX ( c->role ? g_utf8_strlen ( c->role, -1 ) : 0, pd->role_len );
+    g_free ( tmp_role );
 
     cky = xcb_icccm_get_wm_class ( xcb->connection, c->window );
     xcb_icccm_get_wm_class_reply_t wcr;
     if ( xcb_icccm_get_wm_class_reply ( xcb->connection, cky, &wcr, NULL ) ) {
-        c->class     = rofi_latin_to_utf8_strdup ( wcr.class_name, -1 );
-        c->name      = rofi_latin_to_utf8_strdup ( wcr.instance_name, -1 );
+        c->class     = g_markup_escape_text ( wcr.class_name, -1 );
+        c->name      = g_markup_escape_text ( wcr.instance_name, -1 );
         pd->name_len = MAX ( c->name ? g_utf8_strlen ( c->name, -1 ) : 0, pd->name_len );
         xcb_icccm_get_wm_class_reply_wipe ( &wcr );
     }
@@ -454,7 +467,7 @@ static unsigned int window_mode_get_num_entries ( const Mode *sw )
  * Is there a call for this?
  */
 const char *invalid_desktop_name = "n/a";
-static const char * _window_name_list_entry  ( const char *str, uint32_t length, int entry )
+static const char * _window_name_list_entry ( const char *str, uint32_t length, int entry )
 {
     uint32_t offset = 0;
     int      index  = 0;
@@ -491,14 +504,15 @@ static void _window_mode_load_data ( Mode *sw, unsigned int cd )
         current_desktop = 0;
     }
 
-    c = xcb_ewmh_get_client_list_stacking ( &xcb->ewmh, 0 );
+    g_debug ( "Get list from: %d", xcb->screen_nbr );
+    c = xcb_ewmh_get_client_list_stacking ( &xcb->ewmh, xcb->screen_nbr );
     xcb_ewmh_get_windows_reply_t clients = { 0, };
     if ( xcb_ewmh_get_client_list_stacking_reply ( &xcb->ewmh, c, &clients, NULL ) ) {
         found = 1;
     }
     else {
         c = xcb_ewmh_get_client_list ( &xcb->ewmh, xcb->screen_nbr );
-        if  ( xcb_ewmh_get_client_list_reply ( &xcb->ewmh, c, &clients, NULL ) ) {
+        if ( xcb_ewmh_get_client_list_reply ( &xcb->ewmh, c, &clients, NULL ) ) {
             found = 1;
         }
     }
@@ -506,7 +520,7 @@ static void _window_mode_load_data ( Mode *sw, unsigned int cd )
         return;
     }
 
-    if (  clients.windows_len > 0 ) {
+    if ( clients.windows_len > 0 ) {
         int i;
         // windows we actually display. May be slightly different to _NET_CLIENT_LIST_STACKING
         // if we happen to have a window destroyed while we're working...
@@ -560,24 +574,30 @@ static void _window_mode_load_data ( Mode *sw, unsigned int cd )
                             char *output = NULL;
                             if ( pango_parse_markup ( _window_name_list_entry ( names.strings, names.strings_len,
                                                                                 c->wmdesktop ), -1, 0, NULL, &output, NULL, NULL ) ) {
-                                c->wmdesktopstr = output;
+                                c->wmdesktopstr     = g_strdup ( _window_name_list_entry ( names.strings, names.strings_len, c->wmdesktop ) );
+                                c->wmdesktopstr_len = g_utf8_strlen ( output, -1 );
+                                pd->wmdn_len        = MAX ( pd->wmdn_len, c->wmdesktopstr_len );
+                                g_free ( output );
                             }
                             else {
                                 c->wmdesktopstr = g_strdup ( "Invalid name" );
+                                pd->wmdn_len    = MAX ( pd->wmdn_len, g_utf8_strlen ( c->wmdesktopstr, -1 ) );
                             }
                         }
                         else {
-                            c->wmdesktopstr = g_strdup ( _window_name_list_entry ( names.strings, names.strings_len, c->wmdesktop ) );
+                            c->wmdesktopstr = g_markup_escape_text ( _window_name_list_entry ( names.strings, names.strings_len, c->wmdesktop ), -1 );
+                            pd->wmdn_len    = MAX ( pd->wmdn_len, g_utf8_strlen ( c->wmdesktopstr, -1 ) );
                         }
                     }
                     else {
                         c->wmdesktopstr = g_strdup_printf ( "%u", (uint32_t) c->wmdesktop );
+                        pd->wmdn_len    = MAX ( pd->wmdn_len, g_utf8_strlen ( c->wmdesktopstr, -1 ) );
                     }
                 }
                 else {
                     c->wmdesktopstr = g_strdup ( "" );
+                    pd->wmdn_len    = MAX ( pd->wmdn_len, g_utf8_strlen ( c->wmdesktopstr, -1 ) );
                 }
-                pd->wmdn_len = MAX ( pd->wmdn_len, g_utf8_strlen ( c->wmdesktopstr, -1 ) );
                 if ( cd && c->wmdesktop != current_desktop ) {
                     continue;
                 }
@@ -633,7 +653,7 @@ static inline int act_on_window ( xcb_window_t window )
     g_spawn_async ( NULL, args, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, &error );
     if ( error != NULL ) {
         char *msg = g_strdup_printf ( "Failed to execute action for window: '%s'\nError: '%s'", window_regex, error->message );
-        rofi_view_error_dialog ( msg, FALSE  );
+        rofi_view_error_dialog ( msg, FALSE );
         g_free ( msg );
         // print error.
         g_error_free ( error );
@@ -655,6 +675,8 @@ static ModeMode window_mode_result ( Mode *sw, int mretv, G_GNUC_UNUSED char **i
             act_on_window ( rmpd->ids->array[selected_line] );
         }
         else {
+            // Disable reverting input focus to previous window.
+            xcb->focus_revert = 0;
             rofi_view_hide ();
             if ( ( current_window_manager & WM_DO_NOT_CHANGE_CURRENT_DESKTOP ) == 0 ) {
                 // Get the desktop of the client to switch to
@@ -696,6 +718,18 @@ static ModeMode window_mode_result ( Mode *sw, int mretv, G_GNUC_UNUSED char **i
     else if ( ( mretv & ( MENU_ENTRY_DELETE ) ) == MENU_ENTRY_DELETE ) {
         xcb_ewmh_request_close_window ( &( xcb->ewmh ), xcb->screen_nbr, rmpd->ids->array[selected_line], XCB_CURRENT_TIME, XCB_EWMH_CLIENT_SOURCE_TYPE_OTHER );
         xcb_flush ( xcb->connection );
+        ThemeWidget *wid = rofi_config_find_widget ( sw->name, NULL, TRUE );
+        Property    *p   = rofi_theme_find_property ( wid, P_BOOLEAN, "close-on-delete", TRUE );
+        if ( p && p->type == P_BOOLEAN && p->value.b == FALSE ){
+          // Force a reload.
+          client_free ( rmpd->ids->data[selected_line] );
+          g_free      ( rmpd->ids->data[selected_line] );
+          memmove(&(rmpd->ids->array[selected_line]), &(rmpd->ids->array[selected_line+1]), rmpd->ids->len-selected_line);
+          memmove(&(rmpd->ids->data[selected_line]),  &(rmpd->ids->data[selected_line+1]),  rmpd->ids->len-selected_line);
+          rmpd->ids->len--;
+
+          retv = RELOAD_DIALOG;
+        } 
     }
     else if ( ( mretv & MENU_CUSTOM_INPUT ) && *input != NULL && *input[0] != '\0' ) {
         GError   *error      = NULL;
@@ -709,10 +743,13 @@ static ModeMode window_mode_result ( Mode *sw, int mretv, G_GNUC_UNUSED char **i
         }
 
         RofiHelperExecuteContext context = { .name = NULL };
-        if (  !helper_execute_command ( NULL, lf_cmd, run_in_term, run_in_term ? &context : NULL ) ) {
+        if ( !helper_execute_command ( NULL, lf_cmd, run_in_term, run_in_term ? &context : NULL ) ) {
             retv = RELOAD_DIALOG;
         }
         g_free ( lf_cmd );
+    }
+    else if ( mretv & MENU_CUSTOM_COMMAND ) {
+        retv = ( mretv & MENU_LOWER_MASK );
     }
     return retv;
 }
@@ -735,12 +772,11 @@ struct arg
     client                    *c;
 };
 
-static void helper_eval_add_str ( GString *str, const char *input, int l, int max_len )
+static void helper_eval_add_str ( GString *str, const char *input, int l, int max_len, int nc )
 {
     // g_utf8 does not work with NULL string.
     const char *input_nn = input ? input : "";
     // Both l and max_len are in characters, not bytes.
-    int        nc     = g_utf8_strlen ( input_nn, -1 );
     int        spaces = 0;
     if ( l == 0 ) {
         spaces = MAX ( 0, max_len - nc );
@@ -748,12 +784,16 @@ static void helper_eval_add_str ( GString *str, const char *input, int l, int ma
     }
     else {
         if ( nc > l ) {
-            int bl = g_utf8_offset_to_pointer ( input_nn, l ) - input_nn;
-            g_string_append_len ( str, input_nn, bl );
+            int  bl   = g_utf8_offset_to_pointer ( input_nn, l ) - input_nn;
+            char *tmp = g_markup_escape_text ( input_nn, bl );
+            g_string_append ( str, tmp );
+            g_free ( tmp );
         }
         else {
             spaces = l - nc;
-            g_string_append ( str, input_nn );
+            char *tmp = g_markup_escape_text ( input_nn, -1 );
+            g_string_append ( str, tmp );
+            g_free ( tmp );
         }
     }
     while ( spaces-- ) {
@@ -770,28 +810,26 @@ static gboolean helper_eval_cb ( const GMatchInfo *info, GString *str, gpointer 
         int l = 0;
         if ( match[2] == ':' ) {
             l = (int) g_ascii_strtoll ( &match[3], NULL, 10 );
-            if ( l < 0 && config.menu_width < 0 ) {
-                l = -config.menu_width + l;
-            }
             if ( l < 0 ) {
                 l = 0;
             }
         }
         if ( match[1] == 'w' ) {
-            helper_eval_add_str ( str, d->c->wmdesktopstr, l, d->pd->wmdn_len );
+            helper_eval_add_str ( str, d->c->wmdesktopstr, l, d->pd->wmdn_len, d->c->wmdesktopstr_len );
         }
         else if ( match[1] == 'c' ) {
-            helper_eval_add_str ( str, d->c->class, l, d->pd->clf_len );
+            helper_eval_add_str ( str, d->c->class, l, d->pd->clf_len, g_utf8_strlen ( d->c->class, -1 ) );
         }
         else if ( match[1] == 't' ) {
-            helper_eval_add_str ( str, d->c->title, l, d->pd->title_len );
+            helper_eval_add_str ( str, d->c->title, l, d->pd->title_len, g_utf8_strlen ( d->c->title, -1 ) );
         }
         else if ( match[1] == 'n' ) {
-            helper_eval_add_str ( str, d->c->name, l, d->pd->name_len );
+            helper_eval_add_str ( str, d->c->name, l, d->pd->name_len, g_utf8_strlen ( d->c->name, -1 ) );
         }
         else if ( match[1] == 'r' ) {
-            helper_eval_add_str ( str, d->c->role, l, d->pd->role_len );
+            helper_eval_add_str ( str, d->c->role, l, d->pd->role_len, g_utf8_strlen ( d->c->role, -1 ) );
         }
+
         g_free ( match );
     }
     return FALSE;
@@ -817,6 +855,7 @@ static char *_get_display_value ( const Mode *sw, unsigned int selected_line, in
     if ( c->active ) {
         *state |= ACTIVE;
     }
+    *state |= MARKUP;
     return get_entry ? _generate_display_string ( rmpd, c ) : NULL;
 }
 

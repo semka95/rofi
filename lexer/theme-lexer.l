@@ -116,7 +116,7 @@ static double rofi_theme_parse_convert_hex ( char high, char low)
                 errno =0; \
                 while ( (result = (int) fread(buf, 1, max_size, current->filein))==0 && ferror(current->filein)) \
                 { \
-                    if( errno != EINTR) \
+                    if ( errno != EINTR ) \
                     { \
                         YY_FATAL_ERROR( "input in flex scanner failed" ); \
                         break; \
@@ -130,7 +130,7 @@ static double rofi_theme_parse_convert_hex ( char high, char low)
             case PT_STRING:\
             {\
                 yy_size_t len = MIN (max_size, current->str_len);\
-                if ( len > 0 ){\
+                if ( len > 0 ) {\
                     memcpy (buf, current->input_str, len);\
                     current->input_str+=len;\
                     current->str_len-=len;\
@@ -227,11 +227,32 @@ LS_SOLID   (?i:solid)
 ORIENTATION_HORI (?i:horizontal)
 ORIENTATION_VERT (?i:vertical)
 
+/* Cursor */
+
+CURSOR_DEF (?i:default)
+CURSOR_PTR (?i:pointer)
+CURSOR_TXT (?i:text)
+
  /* Color schema */
 RGBA (?i:rgb[a]?)
 HWB  (?i:hwb)
 CMYK (?i:cmyk)
 HSL  (?i:hsl[a]?)
+
+/* Image type  */
+URL (?i:url?)
+LINEAR_GRADIENT (?i:linear-gradient?)
+WIDTH  (?i:width?)
+HEIGHT (?i:height?)
+BOTH   (?i:both?)
+
+
+
+TO     (?i:to?)
+RIGHT  (?i:right?)
+LEFT   (?i:left?)
+TOP    (?i:top?)
+BOTTOM (?i:bottom?)
 
 COLOR_TRANSPARENT (?i:transparent)
 
@@ -274,7 +295,7 @@ CONFIGURATION (?i:configuration)
 YY_LLOC_START
 %}
 %{
-if ( queue == NULL ){
+if ( queue == NULL ) {
     queue = g_queue_new ( );
     yylloc->filename = current->filename;
     // unsure why todo this.
@@ -290,8 +311,8 @@ if ( queue == NULL ){
 
 <*>{CPP_COMMENT}            {
     int c = input();
-    while ( c != 0 && c != EOF){
-        if (c == '\n') {
+    while ( c != 0 && c != EOF) {
+        if ( c == '\n' ) {
             yylloc->last_column = 1;
             yylloc->last_line ++;
             break;
@@ -308,8 +329,8 @@ if ( queue == NULL ){
         p = c;
         c = input();
         switch (c) {
-        case '*': yylloc->last_column++; if (p == '/') { c = 0; nesting_depth++; } break;
-        case '/': yylloc->last_column++; if (p == '*') { c = 0; nesting_depth--; } break;
+        case '*': yylloc->last_column++; if ( p == '/' ) { c = 0; nesting_depth++; } break;
+        case '/': yylloc->last_column++; if ( p == '*' ) { c = 0; nesting_depth--; } break;
         case '\n':  {
             yylloc->last_column = 1;
             yylloc->last_line ++;
@@ -333,9 +354,10 @@ if ( queue == NULL ){
     BEGIN(INCLUDE);
 }
 <INITIAL>{THEME} {
-    rofi_theme_reset();
+    //rofi_theme_reset();
     g_queue_push_head ( queue, GINT_TO_POINTER (YY_START) );
     BEGIN(INCLUDE);
+    return T_RESET_THEME;
 }
     /** Skip all whitespace */
 <INCLUDE>{WHITESPACE} {}
@@ -345,7 +367,7 @@ if ( queue == NULL ){
     yytext[yyleng-1] = '\0';
     ParseObject *top = g_queue_peek_head ( file_queue );
     g_assert ( top != NULL );
-    char *file2 = helper_get_theme_path ( &yytext[1] );
+    char *file2 = helper_get_theme_path ( &yytext[1], ".rasi" );
     char *filename = rofi_theme_parse_prepare_file ( file2, top->filename );
     g_free ( file2 );
     if ( g_list_find_custom ( imported_files, filename, (GCompareFunc)g_strcmp0 ) != NULL ) {
@@ -457,6 +479,14 @@ if ( queue == NULL ){
     return T_LINK;
 }
 
+<SECTION>"\{"       {
+  // Double to fit in scheme.
+  g_queue_push_head ( queue, GINT_TO_POINTER (YY_START) );
+  g_queue_push_head ( queue, GINT_TO_POINTER (SECTION) );
+  BEGIN(SECTION);
+  return T_BOPEN;
+}
+
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{EM}       { return T_UNIT_EM; }
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{CH}       { return T_UNIT_CH; }
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT,MEDIA_CONTENT>{PX}       { return T_UNIT_PX; }
@@ -537,6 +567,18 @@ if ( queue == NULL ){
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>argb:{HEX}{7}       {
     return T_ERROR_ARGB_SPEC;
 }
+<PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{URL}             { return T_URL;       }
+<PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{LINEAR_GRADIENT} { return T_LINEAR_GRADIENT;       }
+<PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{WIDTH}           { return T_WIDTH;       }
+<PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{HEIGHT}          { return T_HEIGHT;       }
+<PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{BOTH}            { return T_BOTH;       }
+
+<PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{TO}              { return T_TO;       }
+<PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{LEFT}            { return T_LEFT;     }
+<PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{RIGHT}           { return T_RIGHT;    }
+<PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{TOP}             { return T_TOP;      }
+<PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{BOTTOM}          { return T_BOTTOM;   }
+
  /* Color schemes */
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{RGBA}             { return T_COL_RGBA;       }
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{HSL}              { return T_COL_HSL;        }
@@ -598,11 +640,15 @@ if ( queue == NULL ){
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{ORIENTATION_HORI} { return ORIENTATION_HORI; }
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{ORIENTATION_VERT} { return ORIENTATION_VERT; }
 
+<PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{CURSOR_DEF} { return CURSOR_DEF; }
+<PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{CURSOR_PTR} { return CURSOR_PTR; }
+<PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{CURSOR_TXT} { return CURSOR_TXT; }
+
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{COLOR_TRANSPARENT} {
     return T_COLOR_TRANSPARENT;
 }
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>{COLOR_NAME} {
-    for ( unsigned int iter = 0; iter < num_CSSColors; iter++){
+    for ( unsigned int iter = 0; iter < num_CSSColors; iter++) {
         if ( strcasecmp(yytext, CSSColors[iter].name )== 0 ) {
             yylval->colorval.alpha = 1.0;
             yylval->colorval.red   = CSSColors[iter].r/255.0;
@@ -617,10 +663,10 @@ if ( queue == NULL ){
 <INITIAL,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT><<EOF>>  {
     ParseObject *po = g_queue_pop_head ( file_queue );
     if ( po ) {
-        if ( po->type == PT_FILE ){
+        if ( po->type == PT_FILE ) {
             fclose ( po->filein );
         }
-        g_free (  po );
+        g_free ( po );
     }
     po = g_queue_peek_head ( file_queue );
     if ( po == NULL ) {
@@ -721,12 +767,10 @@ if ( queue == NULL ){
 
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT,PROPERTIES_LIST>. {
     yytext[yyleng-1] = '\0';
-    fprintf(stderr,"prop found: |%s|\n", yytext);
     return T_ERROR_PROPERTY;
 }
 <NAMESTR>. {
     yytext[yyleng-1] = '\0';
-    fprintf(stderr,"namestr found: |%s|\n", yytext);
     return T_ERROR_NAMESTRING;
 }
 %%
@@ -734,7 +778,7 @@ if ( queue == NULL ){
 
 gboolean rofi_theme_parse_file ( const char *file )
 {
-    char *file2 = helper_get_theme_path ( file );
+    char *file2 = helper_get_theme_path ( file, ".rasi" );
     char *filename = rofi_theme_parse_prepare_file ( file2, NULL );
     g_free ( file2 );
 
@@ -765,7 +809,7 @@ gboolean rofi_theme_parse_file ( const char *file )
 
     while ( (po = g_queue_pop_head ( file_queue ) )) {
         if ( po ) {
-            if ( po->type == PT_FILE ){
+            if ( po->type == PT_FILE ) {
                 fclose ( po->filein );
             }
             g_free ( po );
@@ -800,7 +844,7 @@ gboolean rofi_theme_parse_string ( const char *string )
 
     while ( (po = g_queue_pop_head ( file_queue ) )) {
         if ( po ) {
-            if ( po->type == PT_FILE ){
+            if ( po->type == PT_FILE ) {
                 fclose ( po->filein );
             }
             g_free ( po );

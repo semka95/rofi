@@ -166,6 +166,18 @@ static void wayland_rofi_view_get_size ( RofiViewState * state, gint *width, gin
     *height = state->height;
 }
 
+static void wayland_rofi_view_set_cursor ( RofiCursorType type )
+{
+    (void) type;
+
+    // TODO
+}
+
+static void wayland_rofi_view_ping_mouse ( RofiViewState *state )
+{
+    (void) state;
+}
+
 static gboolean wayland_rofi_view_reload_idle ( G_GNUC_UNUSED gpointer data )
 {
     RofiViewState *state = rofi_view_get_active ();
@@ -262,7 +274,7 @@ static void wayland___create_window ( MenuFlags menu_flags )
     // cleanup
     g_object_unref ( p );
 
-    WlState.fullscreen = rofi_theme_get_boolean ( WIDGET ( win ), "fullscreen", config.fullscreen );
+    WlState.fullscreen = rofi_theme_get_boolean ( WIDGET ( win ), "fullscreen", FALSE );
 
     widget_free ( WIDGET ( win ) );
 
@@ -276,24 +288,16 @@ static void wayland___create_window ( MenuFlags menu_flags )
  */
 static void wayland_rofi_view_calculate_window_width ( RofiViewState *state )
 {
+    int screen_width = 1920;
+    display_get_surface_dimensions ( &screen_width, NULL );
+
     if ( WlState.fullscreen == TRUE ) {
-        int width = 1280;
-        display_get_surface_dimensions ( &width, NULL );
-        state->width = width;
+        state->width = screen_width;
         return;
     }
 
-    if ( config.menu_width < 0 ) {
-        double fw = textbox_get_estimated_char_width ( );
-        state->width  = -( fw * config.menu_width );
-        state->width += widget_padding_get_padding_width ( WIDGET ( state->main_window ) );
-    }
-    else {
-        int width = 1920;
-        // Calculate as float to stop silly, big rounding down errors.
-        display_get_surface_dimensions ( &width, NULL );
-        state->width = config.menu_width < 101 ? ( (float) width / 100.0f ) * ( float ) config.menu_width : config.menu_width;
-    }
+    // Calculate as float to stop silly, big rounding down errors.
+    state->width = ( screen_width / 100.0f ) * DEFAULT_MENU_WIDTH;
     // Use theme configured width, if set.
     RofiDistance width = rofi_theme_get_distance ( WIDGET ( state->main_window ), "width", state->width );
     state->width = distance_get_pixel ( width, ROFI_ORIENTATION_HORIZONTAL );
@@ -439,6 +443,8 @@ static view_proxy view_ = {
     .calculate_window_height   = wayland_rofi_view_calculate_window_height,
     .calculate_window_width    = wayland_rofi_view_calculate_window_width,
     .window_update_size        = wayland_rofi_view_window_update_size,
+    .set_cursor                = wayland_rofi_view_set_cursor,
+    .ping_mouse                = wayland_rofi_view_ping_mouse,
 
     .cleanup = wayland_rofi_view_cleanup,
     .hide    = wayland_rofi_view_hide,

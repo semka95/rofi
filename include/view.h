@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -33,7 +33,11 @@
  * @defgroup View View
  *
  * The rofi Menu view.
- *
+ * @{
+ * @}
+ */
+
+/**
  * @defgroup ViewHandle ViewHandle
  * @ingroup View
  *
@@ -58,7 +62,7 @@ typedef enum
  * @param sw the Mode to show.
  * @param input A pointer to a string where the inputted data is placed.
  * @param menu_flags   Flags indicating state of the menu.
- * @param finalize the finailze callback
+ * @param finalize the finalize callback
  *
  * Main menu callback.
  *
@@ -100,10 +104,11 @@ void rofi_view_handle_text ( RofiViewState *state, char *text );
  * @param state the Menu handle
  * @param x The X coordinates of the motion
  * @param y The Y coordinates of the motion
+ * @param find_mouse_target if we should handle pure mouse motion
  *
  * Update the state if needed.
  */
-void rofi_view_handle_mouse_motion ( RofiViewState *state, gint x, gint y );
+void rofi_view_handle_mouse_motion ( RofiViewState *state, gint x, gint y, gboolean find_mouse_target );
 /**
  * @param state the Menu handle
  *
@@ -210,7 +215,7 @@ void rofi_view_remove_active ( RofiViewState *state );
  *
  * The error message to show.
  */
-int rofi_view_error_dialog ( const char *msg, int markup  );
+int rofi_view_error_dialog ( const char *msg, int markup );
 
 /**
  * Queue a redraw.
@@ -245,7 +250,7 @@ void rofi_view_hide ( void );
  *
  * The reloading happens 'lazy', multiple calls might be handled at once.
  */
-void rofi_view_reload ( void  );
+void rofi_view_reload ( void );
 
 /**
  * @param state The handle to the view
@@ -305,9 +310,11 @@ void rofi_view_workers_initialize ( void );
 void rofi_view_workers_finalize ( void );
 
 /**
+ * @param width the width of the monitor.
+ * @param height the height of the monitor.
+ *
  * Return the current monitor workarea.
  *
- * @returns the current monitor workarea
  */
 void rofi_view_get_current_monitor ( int *width, int *height );
 
@@ -318,7 +325,7 @@ void rofi_capture_screenshot ( void );
 /**
  * Set the window title.
  */
-void rofi_view_set_window_title ( const char * title  );
+void rofi_view_set_window_title ( const char * title );
 
 /**
  * set ellipsize mode to start.
@@ -329,8 +336,12 @@ void rofi_view_set_size ( RofiViewState * state, gint width, gint height );
 
 void rofi_view_get_size ( RofiViewState * state, gint *width, gint *height );
 
-void rofi_view_set_window_tilte ( const char * title );
+void rofi_view_ping_mouse ( RofiViewState *state );
+
+void rofi_view_set_window_title ( const char * title );
 void rofi_view_pool_refresh ( void );
+
+void rofi_view_set_cursor ( RofiCursorType type );
 
 struct _view_proxy;
 
@@ -342,5 +353,5 @@ extern const struct _view_proxy *wayland_view_proxy;
 
 void view_init ( const struct _view_proxy *view_in );
 
-/** @}*/
+/** @} */
 #endif

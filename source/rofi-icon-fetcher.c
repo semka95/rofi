@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -46,6 +46,7 @@
 #include <stdint.h>
 
 #include <gdk-pixbuf/gdk-pixbuf.h>
+#include "helper.h"
 
 typedef struct
 {
@@ -77,7 +78,8 @@ typedef struct
     unsigned int         *acount;
 
     uint32_t             uid;
-    int                  size;
+    int                  wsize;
+    int                  hsize;
     cairo_surface_t      *surface;
 
     IconFetcherNameEntry *entry;
@@ -140,6 +142,11 @@ void rofi_icon_fetcher_init ( void )
     g_slist_free ( l );
 }
 
+static void free_wrapper ( gpointer data, G_GNUC_UNUSED gpointer user_data )
+{
+    g_free ( data ) ;
+}
+
 void rofi_icon_fetcher_destroy ( void )
 {
     if ( rofi_icon_fetcher_data == NULL ) {
@@ -151,7 +158,7 @@ void rofi_icon_fetcher_destroy ( void )
     g_hash_table_unref ( rofi_icon_fetcher_data->icon_cache_uid );
     g_hash_table_unref ( rofi_icon_fetcher_data->icon_cache );
 
-    g_list_foreach ( rofi_icon_fetcher_data->supported_extensions, (GFunc) g_free, NULL );
+    g_list_foreach ( rofi_icon_fetcher_data->supported_extensions, free_wrapper, NULL );
     g_list_free ( rofi_icon_fetcher_data->supported_extensions );
     g_free ( rofi_icon_fetcher_data );
 }
@@ -163,14 +170,22 @@ void rofi_icon_fetcher_destroy ( void )
  *     Copyright (C) 2011-2018 Red Hat, Inc.
  */
 #if G_BYTE_ORDER == G_LITTLE_ENDIAN
+/** Location of red byte */
 #define RED_BYTE      2
+/** Location of green byte */
 #define GREEN_BYTE    1
+/** Location of blue byte */
 #define BLUE_BYTE     0
+/** Location of alpha byte */
 #define ALPHA_BYTE    3
 #else
+/** Location of red byte */
 #define RED_BYTE      1
+/** Location of green byte */
 #define GREEN_BYTE    2
+/** Location of blue byte */
 #define BLUE_BYTE     3
+/** Location of alpha byte */
 #define ALPHA_BYTE    0
 #endif
 
@@ -212,8 +227,8 @@ static cairo_surface_t * rofi_icon_fetcher_get_surface_from_pixbuf ( GdkPixbuf
     gint            cstride;
     guint           lo, o;
     guchar          a = 0xff;
-    const guchar    *pixels_end, *line, *line_end;
-    guchar          *cpixels, *cline;
+    const guchar    *pixels_end, *line;
+    guchar          *cpixels;
 
     pixels_end = pixels + height * stride;
     o          = alpha ? 4 : 3;
@@ -225,9 +240,9 @@ static cairo_surface_t * rofi_icon_fetcher_get_surface_from_pixbuf ( GdkPixbuf
 
     cairo_surface_flush ( surface );
     while ( pixels < pixels_end ) {
-        line     = pixels;
-        line_end = line + lo;
-        cline    = cpixels;
+        line = pixels;
+        const guchar *line_end = line + lo;
+        guchar       *cline    = cpixels;
 
         while ( line < line_end ) {
             if ( alpha ) {
@@ -257,7 +272,7 @@ gboolean rofi_icon_fetcher_file_is_image ( const char * const path )
         return FALSE;
     }
     const char *suf = strrchr ( path, '.' );
-    if ( suf == NULL  ) {
+    if ( suf == NULL ) {
         return FALSE;
     }
     suf++;
@@ -288,24 +303,32 @@ static void rofi_icon_fetcher_worker ( thread_state *sdata, G_GNUC_UNUSED gpoint
         icon_path = sentry->entry->name;
     }
     else {
-        icon_path = icon_path_ = nk_xdg_theme_get_icon ( rofi_icon_fetcher_data->xdg_context, themes, NULL, sentry->entry->name, sentry->size, 1, TRUE );
+        icon_path = icon_path_ = nk_xdg_theme_get_icon ( rofi_icon_fetcher_data->xdg_context, themes, NULL, sentry->entry->name, MIN(sentry->wsize,sentry->hsize), 1, TRUE );
         if ( icon_path_ == NULL ) {
-            g_debug ( "failed to get icon %s(%d): n/a", sentry->entry->name, sentry->size  );
-            return;
+            g_debug ( "failed to get icon %s(%dx%d): n/a", sentry->entry->name, sentry->wsize, sentry->hsize );
+
+            const char *ext = g_strrstr(sentry->entry->name, ".");
+            if ( ext ) {
+printf("%s %s\r\n", sentry->entry->name, ext);
+              icon_path = helper_get_theme_path ( sentry->entry->name, ext );
+            }
+            if ( icon_path == NULL ) {
+              return;
+            }
         }
         else{
-            g_debug ( "found icon %s(%d): %s", sentry->entry->name, sentry->size, icon_path  );
+            g_debug ( "found icon %s(%dx%d): %s", sentry->entry->name, sentry->wsize, sentry->hsize, icon_path );
         }
     }
     cairo_surface_t *icon_surf = NULL;
 
     const char      *suf = strrchr ( icon_path, '.' );
-    if ( suf == NULL  ) {
+    if ( suf == NULL ) {
         return;
     }
 
     GError    *error = NULL;
-    GdkPixbuf *pb    = gdk_pixbuf_new_from_file_at_scale ( icon_path, sentry->size, sentry->size, TRUE, &error );
+    GdkPixbuf *pb    = gdk_pixbuf_new_from_file_at_scale ( icon_path, sentry->wsize, sentry->hsize, TRUE, &error );
     if ( error != NULL ) {
         g_warning ( "Failed to load image: %s", error->message );
         g_error_free ( error );
@@ -323,6 +346,40 @@ static void rofi_icon_fetcher_worker ( thread_state *sdata, G_GNUC_UNUSED gpoint
     rofi_view_reload ();
 }
 
+uint32_t rofi_icon_fetcher_query_advanced ( const char *name, const int wsize, const int hsize )
+{
+    g_debug ( "Query: %s(%dx%d)", name, wsize, hsize );
+    IconFetcherNameEntry *entry = g_hash_table_lookup ( rofi_icon_fetcher_data->icon_cache, name );
+    if ( entry == NULL ) {
+        entry       = g_new0 ( IconFetcherNameEntry, 1 );
+        entry->name = g_strdup ( name );
+        g_hash_table_insert ( rofi_icon_fetcher_data->icon_cache, entry->name, entry );
+    }
+    IconFetcherEntry *sentry;
+    for ( GList *iter = g_list_first ( entry->sizes ); iter; iter = g_list_next ( iter ) ) {
+        sentry = iter->data;
+        if ( sentry->wsize == wsize && sentry->hsize == hsize ) {
+            return sentry->uid;
+        }
+    }
+
+    // Not found.
+    sentry          = g_new0 ( IconFetcherEntry, 1 );
+    sentry->uid     = ++( rofi_icon_fetcher_data->last_uid );
+    sentry->wsize    = wsize;
+    sentry->hsize    = hsize;
+    sentry->entry   = entry;
+    sentry->surface = NULL;
+
+    entry->sizes = g_list_prepend ( entry->sizes, sentry );
+    g_hash_table_insert ( rofi_icon_fetcher_data->icon_cache_uid, GINT_TO_POINTER ( sentry->uid ), sentry );
+
+    // Push into fetching queue.
+    sentry->state.callback = rofi_icon_fetcher_worker;
+    g_thread_pool_push ( tpool, sentry, NULL );
+
+    return sentry->uid;
+}
 uint32_t rofi_icon_fetcher_query ( const char *name, const int size )
 {
     g_debug ( "Query: %s(%d)", name, size );
@@ -335,7 +392,7 @@ uint32_t rofi_icon_fetcher_query ( const char *name, const int size )
     IconFetcherEntry *sentry;
     for ( GList *iter = g_list_first ( entry->sizes ); iter; iter = g_list_next ( iter ) ) {
         sentry = iter->data;
-        if ( sentry->size == size ) {
+        if ( sentry->wsize == size && sentry->hsize == size ) {
             return sentry->uid;
         }
     }
@@ -343,7 +400,8 @@ uint32_t rofi_icon_fetcher_query ( const char *name, const int size )
     // Not found.
     sentry          = g_new0 ( IconFetcherEntry, 1 );
     sentry->uid     = ++( rofi_icon_fetcher_data->last_uid );
-    sentry->size    = size;
+    sentry->wsize    = size;
+    sentry->hsize    = size;
     sentry->entry   = entry;
     sentry->surface = NULL;
 

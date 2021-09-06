@@ -36,6 +36,7 @@
 #include <dirent.h>
 
 #include "mode.h"
+#include "theme.h"
 #include "helper.h"
 #include "mode-private.h"
 #include "dialogs/filebrowser.h"
@@ -58,6 +59,27 @@ enum FBFileType
     RFILE,
     NUM_FILE_TYPES,
 };
+
+/**
+ * Possible sorting methods
+ */
+enum FBSortingMethod
+{
+    FB_SORT_NAME,
+    FB_SORT_TIME,
+};
+
+/**
+ * Type of time to sort by
+ */
+enum FBSortingTime
+{
+    FB_MTIME,
+    FB_ATIME,
+    FB_CTIME,
+};
+
+/** Icons to use for the file type */
 const char *icon_name[NUM_FILE_TYPES] =
 {
     "go-up",
@@ -71,6 +93,7 @@ typedef struct
     enum FBFileType type;
     uint32_t        icon_fetch_uid;
     gboolean        link;
+    time_t          time;
 } FBFile;
 
 typedef struct
@@ -79,6 +102,17 @@ typedef struct
     FBFile       *array;
     unsigned int array_length;
 } FileBrowserModePrivateData;
+
+struct
+{
+    enum FBSortingMethod sorting_method;
+    enum FBSortingTime   sorting_time;
+    gboolean             directories_first;
+} file_browser_config = {
+    .sorting_method    = FB_SORT_NAME,
+    .sorting_time      = FB_MTIME,
+    .directories_first = TRUE,
+};
 
 static void free_list ( FileBrowserModePrivateData *pd )
 {
@@ -94,18 +128,90 @@ static void free_list ( FileBrowserModePrivateData *pd )
 #include <sys/types.h>
 #include <dirent.h>
 
-static gint compare ( gconstpointer a, gconstpointer b, G_GNUC_UNUSED gpointer data )
+static gint compare_name ( gconstpointer a, gconstpointer b, G_GNUC_UNUSED gpointer data )
 {
-    FBFile *fa = (FBFile*) a;
-    FBFile *fb = (FBFile*) b;
-    if ( fa->type != fb->type ) {
+    FBFile *fa = (FBFile *) a;
+    FBFile *fb = (FBFile *) b;
+
+    if ( file_browser_config.directories_first && fa->type != fb->type ) {
         return fa->type - fb->type;
     }
 
     return g_strcmp0 ( fa->name, fb->name );
 }
 
-static void get_file_browser (  Mode *sw )
+static gint compare_time ( gconstpointer a, gconstpointer b, G_GNUC_UNUSED gpointer data )
+{
+    FBFile *fa = (FBFile *) a;
+    FBFile *fb = (FBFile *) b;
+
+    if ( file_browser_config.directories_first && fa->type != fb->type ) {
+        return fa->type - fb->type;
+    }
+
+    if ( fa->time < 0 ) {
+        return -1;
+    }
+
+    if ( fb->time < 0 ) {
+        return 1;
+    }
+
+    return fb->time - fa->time;
+}
+
+static gint compare ( gconstpointer a, gconstpointer b, gpointer data )
+{
+    GCompareDataFunc comparator = NULL;
+
+    switch ( file_browser_config.sorting_method )
+    {
+    case FB_SORT_NAME:
+        comparator = compare_name;
+        break;
+    case FB_SORT_TIME:
+        comparator = compare_time;
+        break;
+    default:
+        comparator = compare_name;
+        break;
+    }
+
+    return comparator ( a, b, data );
+}
+
+static time_t get_time ( const struct stat *statbuf )
+{
+    switch ( file_browser_config.sorting_time )
+    {
+    case FB_MTIME:
+        return statbuf->st_mtim.tv_sec;
+    case FB_ATIME:
+        return statbuf->st_atim.tv_sec;
+    case FB_CTIME:
+        return statbuf->st_ctim.tv_sec;
+    default:
+        return 0;
+    }
+}
+
+static void set_time ( FBFile *file )
+{
+    gchar* path = g_filename_from_utf8 ( file->path, -1, NULL, NULL, NULL );
+
+    struct stat statbuf;
+
+    if ( stat ( path, &statbuf ) == 0 ) {
+        file->time = get_time ( &statbuf );
+    }
+    else {
+        g_warning ( "Failed to stat file: %s, %s", path, strerror ( errno ) );
+    }
+
+    g_free ( path );
+}
+
+static void get_file_browser ( Mode *sw )
 {
     FileBrowserModePrivateData *pd = (FileBrowserModePrivateData *) mode_get_private_data ( sw );
     /**
@@ -125,6 +231,7 @@ static void get_file_browser (  Mode *sw )
                 pd->array[pd->array_length].type           = UP;
                 pd->array[pd->array_length].icon_fetch_uid = 0;
                 pd->array[pd->array_length].link           = FALSE;
+                pd->array[pd->array_length].time           = -1;
                 pd->array_length++;
                 continue;
             }
@@ -150,6 +257,11 @@ static void get_file_browser (  Mode *sw )
                 pd->array[pd->array_length].type           = ( rd->d_type == DT_DIR ) ? DIRECTORY : RFILE;
                 pd->array[pd->array_length].icon_fetch_uid = 0;
                 pd->array[pd->array_length].link           = FALSE;
+
+                if ( file_browser_config.sorting_method == FB_SORT_TIME ) {
+                    set_time ( &pd->array[pd->array_length] );
+                }
+
                 pd->array_length++;
                 break;
             case DT_LNK:
@@ -163,7 +275,7 @@ static void get_file_browser (  Mode *sw )
                 pd->array[pd->array_length].type = RFILE;
                 {
                     // If we have link, use a stat to fine out what it is, if we fail, we mark it as file.
-                    // TODO have a 'broken link'  mode?
+                    // TODO have a 'broken link' mode?
                     // Convert full path to right encoding.
                     char *file = g_filename_from_utf8 ( pd->array[pd->array_length].path, -1, NULL, NULL, NULL );
                     if ( file ) {
@@ -174,6 +286,10 @@ static void get_file_browser (  Mode *sw )
                             }
                             else if ( S_ISREG ( statbuf.st_mode ) ) {
                                 pd->array[pd->array_length].type = RFILE;
+                            }
+
+                            if ( file_browser_config.sorting_method == FB_SORT_TIME ) {
+                                pd->array[pd->array_length].time = get_time ( &statbuf );
                             }
                         }
                         else {
@@ -192,6 +308,83 @@ static void get_file_browser (  Mode *sw )
     g_qsort_with_data ( pd->array, pd->array_length, sizeof ( FBFile ), compare, NULL );
 }
 
+static void file_browser_mode_init_config ( Mode *sw )
+{
+    char     *msg        = NULL;
+    gboolean found_error = FALSE;
+
+    ThemeWidget *wid = rofi_config_find_widget ( sw->name, NULL, TRUE );
+
+    Property    *p   = rofi_theme_find_property ( wid, P_STRING, "sorting-method", TRUE );
+    if ( p != NULL && p->type == P_STRING ) {
+        if ( g_strcmp0 ( p->value.s, "name" ) == 0 ) {
+            file_browser_config.sorting_method = FB_SORT_NAME;
+        }
+        else if ( g_strcmp0 ( p->value.s, "mtime" ) == 0 ) {
+            file_browser_config.sorting_method = FB_SORT_TIME;
+            file_browser_config.sorting_time = FB_MTIME;
+        }
+        else if ( g_strcmp0 ( p->value.s, "atime" ) == 0 ) {
+            file_browser_config.sorting_method = FB_SORT_TIME;
+            file_browser_config.sorting_time = FB_ATIME;
+        }
+        else if ( g_strcmp0 ( p->value.s, "ctime" ) == 0 ) {
+            file_browser_config.sorting_method = FB_SORT_TIME;
+            file_browser_config.sorting_time = FB_CTIME;
+        }
+        else {
+            found_error = TRUE;
+
+            msg = g_strdup_printf ( "\"%s\" is not a valid filebrowser sorting method", p->value.s );
+        }
+    }
+
+    p = rofi_theme_find_property ( wid, P_BOOLEAN, "directories-first", TRUE );
+    if ( p != NULL && p->type == P_BOOLEAN ) {
+        file_browser_config.directories_first = p->value.b;
+    }
+
+    if ( found_error ) {
+        rofi_view_error_dialog ( msg, FALSE );
+
+        g_free ( msg );
+    }
+}
+
+static void file_browser_mode_init_current_dir ( Mode *sw ) {
+    FileBrowserModePrivateData *pd = (FileBrowserModePrivateData *) mode_get_private_data ( sw );
+
+    ThemeWidget *wid = rofi_config_find_widget ( sw->name, NULL, TRUE );
+
+    Property    *p   = rofi_theme_find_property ( wid, P_STRING, "directory", TRUE );
+
+    gboolean config_has_valid_dir = p != NULL && p->type == P_STRING
+        && g_file_test ( p->value.s, G_FILE_TEST_IS_DIR );
+
+    if ( config_has_valid_dir ) {
+        pd->current_dir = g_file_new_for_path ( p->value.s );
+    } else {
+        char *current_dir = NULL;
+        char *cache_file = g_build_filename ( cache_dir, FILEBROWSER_CACHE_FILE, NULL );
+
+        if ( g_file_get_contents ( cache_file, &current_dir, NULL, NULL ) ) {
+            if ( g_file_test ( current_dir, G_FILE_TEST_IS_DIR ) ) {
+                pd->current_dir = g_file_new_for_path ( current_dir );
+            }
+
+            g_free ( current_dir );
+        }
+
+        // Store it based on the unique identifiers (desktop_id).
+        g_free ( cache_file );
+    }
+
+
+    if ( pd->current_dir == NULL ) {
+        pd->current_dir = g_file_new_for_path ( g_get_home_dir () );
+    }
+}
+
 static int file_browser_mode_init ( Mode *sw )
 {
     /**
@@ -200,21 +393,10 @@ static int file_browser_mode_init ( Mode *sw )
     if ( mode_get_private_data ( sw ) == NULL ) {
         FileBrowserModePrivateData *pd = g_malloc0 ( sizeof ( *pd ) );
         mode_set_private_data ( sw, (void *) pd );
-        {
-            char *path = g_build_filename ( cache_dir, FILEBROWSER_CACHE_FILE, NULL );
-            char *file = NULL;
-            if ( g_file_get_contents ( path, &file, NULL, NULL ) ) {
-                if ( g_file_test ( file, G_FILE_TEST_IS_DIR ) ) {
-                    pd->current_dir = g_file_new_for_path ( file );
-                }
-                g_free ( file );
-            }
-            // Store it based on the unique identifiers (desktop_id).
-            g_free ( path );
-            if ( pd->current_dir == NULL ) {
-                pd->current_dir = g_file_new_for_path ( g_get_home_dir () );
-            }
-        }
+
+        file_browser_mode_init_config ( sw );
+        file_browser_mode_init_current_dir ( sw );
+
         // Load content.
         get_file_browser ( sw );
     }
@@ -237,6 +419,9 @@ static ModeMode file_browser_mode_result ( Mode *sw, int mretv, char **input, un
         retv = PREVIOUS_DIALOG;
     }
     else if ( mretv & MENU_QUICK_SWITCH ) {
+        retv = ( mretv & MENU_LOWER_MASK );
+    }
+    else if ( mretv & MENU_CUSTOM_COMMAND ) {
         retv = ( mretv & MENU_LOWER_MASK );
     }
     else if ( ( mretv & MENU_OK ) ) {
@@ -263,8 +448,10 @@ static ModeMode file_browser_mode_result ( Mode *sw, int mretv, char **input, un
                 return RESET_DIALOG;
             }
             else if ( pd->array[selected_line].type == RFILE ) {
-                char *d   = g_filename_from_utf8 ( pd->array[selected_line].path, -1, NULL, NULL, NULL );
-                char *cmd = g_strdup_printf ( "xdg-open '%s'", d );
+                char *d     = g_filename_from_utf8 ( pd->array[selected_line].path, -1, NULL, NULL, NULL );
+                char *d_esc = g_shell_quote ( d );
+                char *cmd   = g_strdup_printf ( "xdg-open %s", d_esc );
+                g_free ( d_esc );
                 g_free ( d );
                 char *cdir = g_file_get_path ( pd->current_dir );
                 helper_execute_command ( cdir, cmd, FALSE, NULL );
@@ -279,7 +466,7 @@ static ModeMode file_browser_mode_result ( Mode *sw, int mretv, char **input, un
         char *p   = rofi_expand_path ( *input );
         char *dir = g_filename_from_utf8 ( p, -1, NULL, NULL, NULL );
         g_free ( p );
-        if ( g_file_test ( dir, G_FILE_TEST_EXISTS )  ) {
+        if ( g_file_test ( dir, G_FILE_TEST_EXISTS ) ) {
             if ( g_file_test ( dir, G_FILE_TEST_IS_DIR ) ) {
                 g_object_unref ( pd->current_dir );
                 pd->current_dir = g_file_new_for_path ( dir );
@@ -395,7 +582,7 @@ Mode *create_new_file_browser ( void )
     return sw;
 }
 
-#if 0
+#if 1
 ModeMode file_browser_mode_completer ( Mode *sw, int mretv, char **input, unsigned int selected_line, char **path )
 {
     ModeMode                   retv = MODE_EXIT;
@@ -440,7 +627,7 @@ ModeMode file_browser_mode_completer ( Mode *sw, int mretv, char **input, unsign
         char *p   = rofi_expand_path ( *input );
         char *dir = g_filename_from_utf8 ( p, -1, NULL, NULL, NULL );
         g_free ( p );
-        if ( g_file_test ( dir, G_FILE_TEST_EXISTS )  ) {
+        if ( g_file_test ( dir, G_FILE_TEST_EXISTS ) ) {
             if ( g_file_test ( dir, G_FILE_TEST_IS_DIR ) ) {
                 g_object_unref ( pd->current_dir );
                 pd->current_dir = g_file_new_for_path ( dir );
@@ -464,8 +651,8 @@ Mode file_browser_mode =
 {
     .display_name       = NULL,
     .abi_version        = ABI_VERSION,
-    .name               = "file-browser",
-    .cfg_name_key       = "display-file_browser",
+    .name               = "filebrowser",
+    .cfg_name_key       = "display-filebrowser",
     ._init              = file_browser_mode_init,
     ._get_num_entries   = file_browser_mode_get_num_entries,
     ._result            = file_browser_mode_result,

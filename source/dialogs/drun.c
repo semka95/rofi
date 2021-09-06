@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -51,6 +51,8 @@
 #include "widgets/textbox.h"
 #include "history.h"
 #include "dialogs/drun.h"
+#include "dialogs/filebrowser.h"
+#include "mode-private.h"
 #include "xcb.h"
 
 #include "rofi-icon-fetcher.h"
@@ -67,6 +69,7 @@ typedef enum
     DRUN_DESKTOP_ENTRY_TYPE_UNDETERMINED = 0,
     DRUN_DESKTOP_ENTRY_TYPE_APPLICATION,
     DRUN_DESKTOP_ENTRY_TYPE_LINK,
+    DRUN_DESKTOP_ENTRY_TYPE_SERVICE,
     DRUN_DESKTOP_ENTRY_TYPE_DIRECTORY,
 } DRunDesktopEntryType;
 
@@ -120,7 +123,8 @@ typedef struct
 typedef struct
 {
     const char *entry_field_name;
-    gboolean   enabled;
+    gboolean   enabled_match;
+    gboolean   enabled_display;
 } DRunEntryField;
 
 typedef enum
@@ -135,12 +139,12 @@ typedef enum
 } DRunMatchingFields;
 
 static DRunEntryField matching_entry_fields[DRUN_MATCH_NUM_FIELDS] = {
-    { .entry_field_name = "name",       .enabled = TRUE,  },
-    { .entry_field_name = "generic",    .enabled = TRUE,  },
-    { .entry_field_name = "exec",       .enabled = TRUE,  },
-    { .entry_field_name = "categories", .enabled = TRUE,  },
-    { .entry_field_name = "keywords",   .enabled = TRUE,  },
-    { .entry_field_name = "comment",    .enabled = FALSE, }
+    { .entry_field_name = "name",       .enabled_match = TRUE, .enabled_display = TRUE, },
+    { .entry_field_name = "generic",    .enabled_match = TRUE, .enabled_display = TRUE, },
+    { .entry_field_name = "exec",       .enabled_match = TRUE, .enabled_display = TRUE, },
+    { .entry_field_name = "categories", .enabled_match = TRUE, .enabled_display = TRUE, },
+    { .entry_field_name = "keywords",   .enabled_match = TRUE, .enabled_display = TRUE, },
+    { .entry_field_name = "comment",    .enabled_match = FALSE,.enabled_display = FALSE,}
 };
 
 struct _DRunModePrivateData
@@ -159,11 +163,23 @@ struct _DRunModePrivateData
     const gchar   *icon_theme;
     // DE
     gchar         **current_desktop_list;
+
+
+    gboolean     file_complete;
+    Mode         *completer;
+    char         *old_completer_input;
+    uint32_t     selected_line;
+    char         *old_input;
+
+    /** fallback icon */
+    uint32_t      fallback_icon_fetch_uid;
+    cairo_surface_t *fallback_icon;
 };
 
 struct RegexEvalArg
 {
     DRunModeEntry *e;
+    const char *path;
     gboolean      success;
 };
 
@@ -178,12 +194,19 @@ static gboolean drun_helper_eval_cb ( const GMatchInfo *info, GString *res, gpoi
     if ( match != NULL ) {
         switch ( match[1] )
         {
-        // Unsupported
         case 'f':
         case 'F':
         case 'u':
         case 'U':
+            g_string_append(res, e->path);
+            break;
+        // Unsupported
         case 'i':
+            // TODO
+            if ( e->e && e->e->icon ) {
+                g_string_append_printf(res, "--icon %s", e->e->icon_name );
+            }
+            break;
         // Deprecated
         case 'd':
         case 'D':
@@ -257,7 +280,7 @@ static void launch_link_entry ( DRunModeEntry *e )
         g_free ( path );
     }
 }
-static void exec_cmd_entry ( DRunModeEntry *e )
+static void exec_cmd_entry ( DRunModeEntry *e, const char *path )
 {
     GError *error = NULL;
     GRegex *reg   = g_regex_new ( "%[a-zA-Z%]", 0, 0, &error );
@@ -266,7 +289,7 @@ static void exec_cmd_entry ( DRunModeEntry *e )
         g_error_free ( error );
         return;
     }
-    struct RegexEvalArg earg = { .e = e, .success = TRUE };
+    struct RegexEvalArg earg = { .e = e, .path = path, .success = TRUE };
     char                *str = g_regex_replace_eval ( reg, e->exec, -1, 0, 0, drun_helper_eval_cb, &earg, &error );
     if ( error != NULL ) {
         g_warning ( "Internal error, failed replace field codes: %s.", error->message );
@@ -397,6 +420,10 @@ static void read_desktop_file ( DRunModePrivateData *pd, const char *root, const
     else if ( !g_strcmp0 ( key, "Link" ) ) {
         desktop_entry_type = DRUN_DESKTOP_ENTRY_TYPE_LINK;
     }
+    else if ( !g_strcmp0 ( key, "Service" ) ) {
+        desktop_entry_type = DRUN_DESKTOP_ENTRY_TYPE_SERVICE;
+        g_debug ( "Service file detected." );
+    }
     else {
         g_debug ( "[%s] [%s] Skipping desktop file: Not of type Application or Link (%s)", id, path, key );
         g_free ( key );
@@ -441,7 +468,7 @@ static void read_desktop_file ( DRunModePrivateData *pd, const char *root, const
             if ( list ) {
                 for ( gsize lcd = 0; show && pd->current_desktop_list[lcd]; lcd++ ) {
                     for ( gsize lle = 0; show && lle < llength; lle++ ) {
-                        show = !( g_strcmp0  ( pd->current_desktop_list[lcd], list[lle] ) == 0 );
+                        show = !( g_strcmp0 ( pd->current_desktop_list[lcd], list[lle] ) == 0 );
                     }
                 }
                 g_strfreev ( list );
@@ -467,6 +494,12 @@ static void read_desktop_file ( DRunModePrivateData *pd, const char *root, const
     if ( desktop_entry_type == DRUN_DESKTOP_ENTRY_TYPE_APPLICATION
          && !g_key_file_has_key ( kf, DRUN_GROUP_NAME, "Exec", NULL ) ) {
         g_debug ( "[%s] [%s] Unsupported desktop file: no 'Exec' key present for type Application.", id, path );
+        g_key_file_free ( kf );
+        return;
+    }
+    if ( desktop_entry_type == DRUN_DESKTOP_ENTRY_TYPE_SERVICE
+         && !g_key_file_has_key ( kf, DRUN_GROUP_NAME, "Exec", NULL ) ) {
+        g_debug ( "[%s] [%s] Unsupported desktop file: no 'Exec' key present for type Service.", id, path );
         g_key_file_free ( kf );
         return;
     }
@@ -501,7 +534,7 @@ static void read_desktop_file ( DRunModePrivateData *pd, const char *root, const
     char **categories = NULL;
     if ( pd->show_categories ) {
         categories = g_key_file_get_locale_string_list ( kf, DRUN_GROUP_NAME, "Categories", NULL, NULL, NULL );
-        if (  !rofi_strv_contains ( (const char * const *) categories, (const char * const *) pd->show_categories ) ) {
+        if ( !rofi_strv_contains ( (const char * const *) categories, (const char * const *) pd->show_categories ) ) {
             g_strfreev ( categories );
             g_key_file_free ( kf );
             return;
@@ -540,15 +573,16 @@ static void read_desktop_file ( DRunModePrivateData *pd, const char *root, const
     pd->entry_list[pd->cmd_list_length].action = DRUN_GROUP_NAME;
     gchar *gn = g_key_file_get_locale_string ( kf, DRUN_GROUP_NAME, "GenericName", NULL, NULL );
     pd->entry_list[pd->cmd_list_length].generic_name = gn;
-
-    if ( matching_entry_fields[DRUN_MATCH_FIELD_KEYWORDS].enabled ) {
+    if ( matching_entry_fields[DRUN_MATCH_FIELD_KEYWORDS].enabled_match
+       || matching_entry_fields[DRUN_MATCH_FIELD_CATEGORIES].enabled_display) {
         pd->entry_list[pd->cmd_list_length].keywords = g_key_file_get_locale_string_list ( kf, DRUN_GROUP_NAME, "Keywords", NULL, NULL, NULL );
     }
     else {
         pd->entry_list[pd->cmd_list_length].keywords = NULL;
     }
 
-    if ( matching_entry_fields[DRUN_MATCH_FIELD_CATEGORIES].enabled ) {
+    if ( matching_entry_fields[DRUN_MATCH_FIELD_CATEGORIES].enabled_match
+        || matching_entry_fields[DRUN_MATCH_FIELD_CATEGORIES].enabled_display ) {
         if ( categories ) {
             pd->entry_list[pd->cmd_list_length].categories = categories;
             categories                                     = NULL;
@@ -563,26 +597,23 @@ static void read_desktop_file ( DRunModePrivateData *pd, const char *root, const
     g_strfreev ( categories );
 
     pd->entry_list[pd->cmd_list_length].type = desktop_entry_type;
-    if ( desktop_entry_type == DRUN_DESKTOP_ENTRY_TYPE_APPLICATION ) {
+    if ( desktop_entry_type == DRUN_DESKTOP_ENTRY_TYPE_APPLICATION ||
+         desktop_entry_type == DRUN_DESKTOP_ENTRY_TYPE_SERVICE ) {
         pd->entry_list[pd->cmd_list_length].exec = g_key_file_get_string ( kf, action, "Exec", NULL );
     }
     else {
         pd->entry_list[pd->cmd_list_length].exec = NULL;
     }
 
-    if ( matching_entry_fields[DRUN_MATCH_FIELD_COMMENT].enabled ) {
+    if ( matching_entry_fields[DRUN_MATCH_FIELD_COMMENT].enabled_match
+            || matching_entry_fields[DRUN_MATCH_FIELD_COMMENT].enabled_display ) {
         pd->entry_list[pd->cmd_list_length].comment = g_key_file_get_locale_string ( kf,
                                                                                      DRUN_GROUP_NAME, "Comment", NULL, NULL );
     }
     else {
         pd->entry_list[pd->cmd_list_length].comment = NULL;
     }
-    if ( config.show_icons ) {
-        pd->entry_list[pd->cmd_list_length].icon_name = g_key_file_get_locale_string ( kf, DRUN_GROUP_NAME, "Icon", NULL, NULL );
-    }
-    else{
-        pd->entry_list[pd->cmd_list_length].icon_name = NULL;
-    }
+    pd->entry_list[pd->cmd_list_length].icon_name = g_key_file_get_locale_string ( kf, DRUN_GROUP_NAME, "Icon", NULL, NULL );
     pd->entry_list[pd->cmd_list_length].icon = NULL;
 
     // Keep keyfile around.
@@ -712,6 +743,15 @@ static gint drun_int_sort_list ( gconstpointer a, gconstpointer b, G_GNUC_UNUSED
     DRunModeEntry *db = (DRunModeEntry *) b;
 
     if ( da->sort_index < 0 && db->sort_index < 0 ) {
+        if ( da->name == NULL && db->name == NULL ) {
+            return 0;
+        }
+        else if ( da->name == NULL ) {
+            return -1;
+        }
+        else if ( db->name == NULL ) {
+            return 1;
+        }
         return g_utf8_collate ( da->name, db->name );
     }
     else {
@@ -907,30 +947,41 @@ static void get_apps ( DRunModePrivateData *pd )
     char *cache_file = g_build_filename ( cache_dir, DRUN_DESKTOP_CACHE_FILE, NULL );
     TICK_N ( "Get Desktop apps (start)" );
     if ( drun_read_cache ( pd, cache_file ) ) {
-        gchar *dir;
-        // First read the user directory.
-        dir = g_build_filename ( g_get_user_data_dir (), "applications", NULL );
-        walk_dir ( pd, dir, dir );
-        g_free ( dir );
-        TICK_N ( "Get Desktop apps (user dir)" );
-        // Then read thee system data dirs.
-        const gchar * const * sys = g_get_system_data_dirs ();
-        for ( const gchar * const *iter = sys; *iter != NULL; ++iter ) {
+        ThemeWidget *wid = rofi_config_find_widget ( drun_mode.name, NULL, TRUE );
+
+        /** Load user entires */
+        Property    *p   = rofi_theme_find_property ( wid, P_BOOLEAN, "parse-user", TRUE );
+        if ( p == NULL || ( p->type == P_BOOLEAN && p->value.b )) {
+          gchar *dir;
+          // First read the user directory.
+          dir = g_build_filename ( g_get_user_data_dir (), "applications", NULL );
+          walk_dir ( pd, dir, dir );
+          g_free ( dir );
+          TICK_N ( "Get Desktop apps (user dir)" );
+        }
+
+        /** Load application entires */
+        p  = rofi_theme_find_property ( wid, P_BOOLEAN, "parse-system", TRUE );
+        if ( p == NULL || ( p->type == P_BOOLEAN && p->value.b )) {
+          // Then read thee system data dirs.
+          const gchar * const * sys = g_get_system_data_dirs ();
+          for ( const gchar * const *iter = sys; *iter != NULL; ++iter ) {
             gboolean unique = TRUE;
             // Stupid duplicate detection, better then walking dir.
             for ( const gchar *const *iterd = sys; iterd != iter; ++iterd ) {
-                if ( g_strcmp0 ( *iter, *iterd ) == 0 ) {
-                    unique = FALSE;
-                }
+              if ( g_strcmp0 ( *iter, *iterd ) == 0 ) {
+                unique = FALSE;
+              }
             }
             // Check, we seem to be getting empty string...
             if ( unique && ( **iter ) != '\0' ) {
-                dir = g_build_filename ( *iter, "applications", NULL );
-                walk_dir ( pd, dir, dir );
-                g_free ( dir );
+              char *dir = g_build_filename ( *iter, "applications", NULL );
+              walk_dir ( pd, dir, dir );
+              g_free ( dir );
             }
+          }
+          TICK_N ( "Get Desktop apps (system dirs)" );
         }
-        TICK_N ( "Get Desktop apps (system dirs)" );
         get_apps_history ( pd );
 
         g_qsort_with_data ( pd->entry_list, pd->cmd_list_length, sizeof ( DRunModeEntry ), drun_int_sort_list, NULL );
@@ -950,13 +1001,15 @@ static void drun_mode_parse_entry_fields ()
     const char * const sep           = ",#";
     // Split token on ','. This modifies switcher_str.
     for ( unsigned int i = 0; i < DRUN_MATCH_NUM_FIELDS; i++ ) {
-        matching_entry_fields[i].enabled = FALSE;
+        matching_entry_fields[i].enabled_match = FALSE;
+        matching_entry_fields[i].enabled_display = FALSE;
     }
     for ( char *token = strtok_r ( switcher_str, sep, &savept ); token != NULL;
           token = strtok_r ( NULL, sep, &savept ) ) {
         if ( strcmp ( token, "all" ) == 0 ) {
             for ( unsigned int i = 0; i < DRUN_MATCH_NUM_FIELDS; i++ ) {
-                matching_entry_fields[i].enabled = TRUE;
+                matching_entry_fields[i].enabled_match = TRUE;
+                matching_entry_fields[i].enabled_display = TRUE;
             }
             break;
         }
@@ -965,7 +1018,8 @@ static void drun_mode_parse_entry_fields ()
             for ( unsigned int i = 0; i < DRUN_MATCH_NUM_FIELDS; i++ ) {
                 const char * entry_name = matching_entry_fields[i].entry_field_name;
                 if ( g_ascii_strcasecmp ( token, entry_name ) == 0 ) {
-                    matching_entry_fields[i].enabled = TRUE;
+                    matching_entry_fields[i].enabled_match = TRUE;
+                    matching_entry_fields[i].enabled_display = TRUE;
                     matched                          = TRUE;
                 }
             }
@@ -978,6 +1032,18 @@ static void drun_mode_parse_entry_fields ()
     g_free ( switcher_str );
 }
 
+static void drun_mode_parse_display_format() {
+    for ( int i = 0; i < DRUN_MATCH_NUM_FIELDS; i++ ) {
+        if ( matching_entry_fields[i].enabled_display ) continue;
+
+        gchar* search_term = g_strdup_printf("{%s}",matching_entry_fields[i].entry_field_name);
+        if ( strstr( config.drun_display_format, search_term) ) {
+            matching_entry_fields[i].enabled_match = TRUE;
+        }
+        g_free( search_term );
+    }
+}
+
 static int drun_mode_init ( Mode *sw )
 {
     if ( mode_get_private_data ( sw ) != NULL ) {
@@ -986,7 +1052,7 @@ static int drun_mode_init ( Mode *sw )
     DRunModePrivateData *pd = g_malloc0 ( sizeof ( *pd ) );
     pd->disabled_entries = g_hash_table_new_full ( g_str_hash, g_str_equal, g_free, NULL );
     mode_set_private_data ( sw, (void *) pd );
-    // current destkop
+    // current desktop
     const char *current_desktop = g_getenv ( "XDG_CURRENT_DESKTOP" );
     pd->current_desktop_list = current_desktop ? g_strsplit ( current_desktop, ":", 0 ) : NULL;
 
@@ -995,7 +1061,11 @@ static int drun_mode_init ( Mode *sw )
     }
 
     drun_mode_parse_entry_fields ();
+    drun_mode_parse_display_format();
     get_apps ( pd );
+
+    pd->completer    = create_new_file_browser ();
+    mode_init ( pd->completer );
     return TRUE;
 }
 static void drun_entry_clear ( DRunModeEntry *e )
@@ -1027,11 +1097,39 @@ static ModeMode drun_mode_result ( Mode *sw, int mretv, char **input, unsigned i
     DRunModePrivateData *rmpd = (DRunModePrivateData *) mode_get_private_data ( sw );
     ModeMode            retv  = MODE_EXIT;
 
-    if ( ( mretv & MENU_OK )  ) {
+    if ( rmpd->file_complete == TRUE ) {
+
+        retv = RELOAD_DIALOG;
+
+        if ( ( mretv& (MENU_COMPLETE)) ) {
+            g_free ( rmpd->old_completer_input );
+            rmpd->old_completer_input = *input;
+            *input = NULL;
+            if ( rmpd->selected_line < rmpd->cmd_list_length ) {
+                (*input) = g_strdup ( rmpd->old_input );
+            }
+            rmpd->file_complete = FALSE;
+        }
+        else if ( (mretv&MENU_CANCEL) ) {
+            retv = MODE_EXIT;
+        }
+        else {
+            char *path = NULL;
+            retv = file_browser_mode_completer ( rmpd->completer, mretv, input, selected_line, &path );
+            if ( retv == MODE_EXIT ) {
+                exec_cmd_entry ( &( rmpd->entry_list[rmpd->selected_line] ), path );
+
+            }
+            g_free (path);
+        }
+        return retv;
+    }
+    if ( ( mretv & MENU_OK ) ) {
         switch ( rmpd->entry_list[selected_line].type )
         {
+        case DRUN_DESKTOP_ENTRY_TYPE_SERVICE:
         case DRUN_DESKTOP_ENTRY_TYPE_APPLICATION:
-            exec_cmd_entry ( &( rmpd->entry_list[selected_line] ) );
+            exec_cmd_entry ( &( rmpd->entry_list[selected_line] ), NULL );
             break;
         case DRUN_DESKTOP_ENTRY_TYPE_LINK:
             launch_link_entry ( &( rmpd->entry_list[selected_line] ) );
@@ -1049,7 +1147,7 @@ static ModeMode drun_mode_result ( Mode *sw, int mretv, char **input, unsigned i
         }
     }
     else if ( ( mretv & MENU_ENTRY_DELETE ) && selected_line < rmpd->cmd_list_length ) {
-        // Possitive sort index means it is in history.
+        // Positive sort index means it is in history.
         if ( rmpd->entry_list[selected_line].sort_index >= 0 ) {
             delete_entry_history ( &( rmpd->entry_list[selected_line] ) );
             drun_entry_clear ( &( rmpd->entry_list[selected_line] ) );
@@ -1058,6 +1156,38 @@ static ModeMode drun_mode_result ( Mode *sw, int mretv, char **input, unsigned i
             rmpd->cmd_list_length--;
         }
         retv = RELOAD_DIALOG;
+    }
+    else if ( mretv & MENU_CUSTOM_COMMAND ) {
+        retv = ( mretv & MENU_LOWER_MASK );
+    }
+    else if ( ( mretv& MENU_COMPLETE) ) {
+        retv = RELOAD_DIALOG;
+        if ( selected_line < rmpd->cmd_list_length ) {
+            switch ( rmpd->entry_list[selected_line].type )
+            {
+                case DRUN_DESKTOP_ENTRY_TYPE_SERVICE:
+                case DRUN_DESKTOP_ENTRY_TYPE_APPLICATION:
+                    {
+                        GRegex *regex = g_regex_new ("%[fFuU]", 0, 0, NULL);
+
+                        if (g_regex_match (regex, rmpd->entry_list[selected_line].exec, 0, NULL) ) {
+                            rmpd->selected_line = selected_line;
+                            // TODO add check if it supports passing file.
+
+                            g_free ( rmpd->old_input );
+                            rmpd->old_input = g_strdup ( *input );
+
+                            if ( *input ) g_free (*input);
+                            *input = g_strdup ( rmpd->old_completer_input );
+
+                            rmpd->file_complete =  TRUE;
+                        }
+                        g_regex_unref ( regex );
+                    }
+                default:
+                    break;
+            }
+        }
     }
     return retv;
 }
@@ -1071,6 +1201,10 @@ static void drun_mode_destroy ( Mode *sw )
         g_hash_table_destroy ( rmpd->disabled_entries );
         g_free ( rmpd->entry_list );
 
+        g_free ( rmpd->old_completer_input );
+        g_free ( rmpd->old_input );
+        mode_destroy ( rmpd->completer );
+
         g_strfreev ( rmpd->current_desktop_list );
         g_strfreev ( rmpd->show_categories );
         g_free ( rmpd );
@@ -1081,6 +1215,10 @@ static void drun_mode_destroy ( Mode *sw )
 static char *_get_display_value ( const Mode *sw, unsigned int selected_line, int *state, G_GNUC_UNUSED GList **list, int get_entry )
 {
     DRunModePrivateData *pd = (DRunModePrivateData *) mode_get_private_data ( sw );
+
+    if ( pd->file_complete ) {
+        return pd->completer->_get_display_value (pd->completer, selected_line, state, list, get_entry );
+    }
     *state |= MARKUP;
     if ( !get_entry ) {
         return NULL;
@@ -1136,19 +1274,40 @@ static char *_get_display_value ( const Mode *sw, unsigned int selected_line, in
     return retv;
 }
 
+static cairo_surface_t *fallback_icon ( DRunModePrivateData *pd, int height )
+{
+    if ( config.application_fallback_icon ) {
+        // FALLBACK
+        if ( pd->fallback_icon_fetch_uid > 0 ) {
+            return rofi_icon_fetcher_get ( pd->fallback_icon_fetch_uid );
+        }
+        pd->fallback_icon_fetch_uid = rofi_icon_fetcher_query ( config.application_fallback_icon, height );
+    }
+    return NULL;
+}
 static cairo_surface_t *_get_icon ( const Mode *sw, unsigned int selected_line, int height )
 {
     DRunModePrivateData *pd = (DRunModePrivateData *) mode_get_private_data ( sw );
+    if ( pd->file_complete ) {
+        return pd->completer->_get_icon ( pd->completer, selected_line, height );
+    }
     g_return_val_if_fail ( pd->entry_list != NULL, NULL );
     DRunModeEntry       *dr = &( pd->entry_list[selected_line] );
-    if ( dr->icon_name == NULL ) {
-        return NULL;
+    if ( dr->icon_name != NULL ) {
+        if ( dr->icon_fetch_uid > 0 ) {
+            cairo_surface_t *icon = rofi_icon_fetcher_get ( dr->icon_fetch_uid );
+            if ( icon ) {
+                return icon;
+            }
+            return fallback_icon ( pd, height );
+        }
+        dr->icon_fetch_uid = rofi_icon_fetcher_query ( dr->icon_name, height );
+        cairo_surface_t *icon = rofi_icon_fetcher_get ( dr->icon_fetch_uid );
+        if ( icon ) {
+            return icon;
+        }
     }
-    if ( dr->icon_fetch_uid > 0 ) {
-        return rofi_icon_fetcher_get ( dr->icon_fetch_uid );
-    }
-    dr->icon_fetch_uid = rofi_icon_fetcher_query ( dr->icon_name, height );
-    return rofi_icon_fetcher_get ( dr->icon_fetch_uid );
+    return fallback_icon ( pd, height );
 }
 
 static char *drun_get_completion ( const Mode *sw, unsigned int index )
@@ -1167,30 +1326,33 @@ static char *drun_get_completion ( const Mode *sw, unsigned int index )
 static int drun_token_match ( const Mode *data, rofi_int_matcher **tokens, unsigned int index )
 {
     DRunModePrivateData *rmpd = (DRunModePrivateData *) mode_get_private_data ( data );
-    int                 match = 1;
+    if ( rmpd->file_complete ) {
+        return rmpd->completer->_token_match (rmpd->completer, tokens, index );
+    }
+    int match = 1;
     if ( tokens ) {
         for ( int j = 0; match && tokens != NULL && tokens[j] != NULL; j++ ) {
             int              test        = 0;
             rofi_int_matcher *ftokens[2] = { tokens[j], NULL };
             // Match name
-            if ( matching_entry_fields[DRUN_MATCH_FIELD_NAME].enabled ) {
+            if ( matching_entry_fields[DRUN_MATCH_FIELD_NAME].enabled_match ) {
                 if ( rmpd->entry_list[index].name ) {
                     test = helper_token_match ( ftokens, rmpd->entry_list[index].name );
                 }
             }
-            if ( matching_entry_fields[DRUN_MATCH_FIELD_GENERIC].enabled ) {
+            if ( matching_entry_fields[DRUN_MATCH_FIELD_GENERIC].enabled_match ) {
                 // Match generic name
                 if ( test == tokens[j]->invert && rmpd->entry_list[index].generic_name ) {
                     test = helper_token_match ( ftokens, rmpd->entry_list[index].generic_name );
                 }
             }
-            if ( matching_entry_fields[DRUN_MATCH_FIELD_EXEC].enabled ) {
+            if ( matching_entry_fields[DRUN_MATCH_FIELD_EXEC].enabled_match ) {
                 // Match executable name.
                 if ( test == tokens[j]->invert && rmpd->entry_list[index].exec ) {
                     test = helper_token_match ( ftokens, rmpd->entry_list[index].exec );
                 }
             }
-            if ( matching_entry_fields[DRUN_MATCH_FIELD_CATEGORIES].enabled ) {
+            if ( matching_entry_fields[DRUN_MATCH_FIELD_CATEGORIES].enabled_match ) {
                 // Match against category.
                 if ( test == tokens[j]->invert ) {
                     gchar **list = rmpd->entry_list[index].categories;
@@ -1199,7 +1361,7 @@ static int drun_token_match ( const Mode *data, rofi_int_matcher **tokens, unsig
                     }
                 }
             }
-            if ( matching_entry_fields[DRUN_MATCH_FIELD_KEYWORDS].enabled ) {
+            if ( matching_entry_fields[DRUN_MATCH_FIELD_KEYWORDS].enabled_match ) {
                 // Match against category.
                 if ( test == tokens[j]->invert ) {
                     gchar **list = rmpd->entry_list[index].keywords;
@@ -1208,7 +1370,8 @@ static int drun_token_match ( const Mode *data, rofi_int_matcher **tokens, unsig
                     }
                 }
             }
-            if ( matching_entry_fields[DRUN_MATCH_FIELD_COMMENT].enabled ) {
+            if ( matching_entry_fields[DRUN_MATCH_FIELD_COMMENT].enabled_match ) {
+
                 // Match executable name.
                 if ( test == tokens[j]->invert && rmpd->entry_list[index].comment ) {
                     test = helper_token_match ( ftokens, rmpd->entry_list[index].comment );
@@ -1226,7 +1389,26 @@ static int drun_token_match ( const Mode *data, rofi_int_matcher **tokens, unsig
 static unsigned int drun_mode_get_num_entries ( const Mode *sw )
 {
     const DRunModePrivateData *pd = (const DRunModePrivateData *) mode_get_private_data ( sw );
+    if ( pd->file_complete ) {
+        return pd->completer->_get_num_entries( pd->completer );
+    }
     return pd->cmd_list_length;
+}
+static char *drun_get_message ( const Mode *sw )
+{
+    DRunModePrivateData *pd = sw->private_data;
+    if ( pd->file_complete ) {
+        if ( pd->selected_line < pd->cmd_list_length ) {
+            char *msg =  mode_get_message ( pd->completer);
+            if ( msg ) {
+                char *retv = g_strdup_printf("File complete for: %s\n%s", pd->entry_list[pd->selected_line].name, msg);
+                g_free (msg);
+                return retv;
+            }
+            return g_strdup_printf("File complete for: %s", pd->entry_list[pd->selected_line].name);
+        }
+    }
+    return NULL;
 }
 #include "mode-private.h"
 Mode drun_mode =
@@ -1238,6 +1420,7 @@ Mode drun_mode =
     ._result            = drun_mode_result,
     ._destroy           = drun_mode_destroy,
     ._token_match       = drun_token_match,
+    ._get_message       = drun_get_message,
     ._get_completion    = drun_get_completion,
     ._get_display_value = _get_display_value,
     ._get_icon          = _get_icon,

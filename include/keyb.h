@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -91,7 +91,9 @@ typedef enum
     ACCEPT_ENTRY,
     ACCEPT_ALT,
     ACCEPT_CUSTOM,
+    ACCEPT_CUSTOM_ALT,
     MODE_NEXT,
+    MODE_COMPLETE,
     MODE_PREVIOUS,
     TOGGLE_CASE_SENSITIVITY,
     DELETE_ENTRY,
@@ -184,5 +186,11 @@ gboolean parse_keys_abe ( NkBindings *bindings );
  */
 void setup_abe ( void );
 
+/**
+ * @param name Don't have the name.
+ *
+ * @returns id, or UINT32_MAX if not found.
+ */
+guint key_binding_get_action_from_name ( const char *name );
 /**@}*/
 #endif // ROFI_KEYB_H

@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -168,7 +168,7 @@ static _element ** __history_get_element_list ( FILE *fd, unsigned int *length )
 
         ( *length )++;
     }
-    if ( buffer != NULL  ) {
+    if ( buffer != NULL ) {
         free ( buffer );
         buffer = NULL;
     }

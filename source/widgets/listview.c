@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -169,17 +169,15 @@ static void listview_add_widget ( listview *lv, _listview_row *row, widget *wid,
 {
     TextboxFlags flags = ( lv->multi_select ) ? TB_INDICATOR : 0;
     if ( strcasecmp ( label, "element-icon" ) == 0 ) {
-        if ( config.show_icons ) {
-            row->icon = icon_create ( WIDGET ( wid ), "element-icon" );
-            box_add ( (box *) wid, WIDGET ( row->icon ), FALSE );
-        }
+        row->icon = icon_create ( WIDGET ( wid ), "element-icon" );
+        box_add ( (box *) wid, WIDGET ( row->icon ), FALSE );
     }
     else if ( strcasecmp ( label, "element-text" ) == 0 ) {
         row->textbox = textbox_create ( WIDGET ( wid ), WIDGET_TYPE_TEXTBOX_TEXT, "element-text", TB_AUTOHEIGHT | flags, NORMAL, "DDD", 0, 0 );
         box_add ( (box *) wid, WIDGET ( row->textbox ), TRUE );
     }
     else if ( strcasecmp ( label, "element-index" ) == 0 ) {
-        row->index = textbox_create ( WIDGET ( wid ), WIDGET_TYPE_TEXTBOX_TEXT, "element-text", TB_AUTOHEIGHT, NORMAL, " ", 0, 0 );
+        row->index = textbox_create ( WIDGET ( wid ), WIDGET_TYPE_TEXTBOX_TEXT, "element-index", TB_AUTOHEIGHT, NORMAL, " ", 0, 0 );
         box_add ( (box *) wid, WIDGET ( row->index ), FALSE );
     }
     else {
@@ -196,7 +194,12 @@ static void listview_create_row ( listview *lv, _listview_row *row )
 {
     row->box = box_create ( WIDGET ( lv ), "element", ROFI_ORIENTATION_HORIZONTAL );
     widget_set_type ( WIDGET ( row->box ), WIDGET_TYPE_LISTVIEW_ELEMENT );
-    GList *list = rofi_theme_get_list ( WIDGET ( row->box ), "children", "element-icon,element-text" );
+    GList *list = NULL;
+    if ( config.show_icons ) {
+        list = rofi_theme_get_list ( WIDGET ( row->box ), "children", "element-icon,element-text" );
+    } else {
+        list = rofi_theme_get_list ( WIDGET ( row->box ), "children", "element-text" );
+    }
 
     row->textbox = NULL;
     row->icon    = NULL;
@@ -402,7 +405,7 @@ static void listview_draw ( widget *wid, cairo_t *draw )
         scrollbar_set_handle ( lv->scrollbar, lv->req_elements - lv->selected - 1 );
     }
     else {
-        scrollbar_set_handle ( lv->scrollbar, lv->selected  );
+        scrollbar_set_handle ( lv->scrollbar, lv->selected );
     }
     lv->last_offset = offset;
     int spacing_vert = distance_get_pixel ( lv->spacing, ROFI_ORIENTATION_VERTICAL );
@@ -467,6 +470,7 @@ static void listview_draw ( widget *wid, cairo_t *draw )
     widget_draw ( WIDGET ( lv->scrollbar ), draw );
 }
 static WidgetTriggerActionResult listview_element_trigger_action ( widget *wid, MouseBindingListviewElementAction action, gint x, gint y, void *user_data );
+static gboolean listview_element_motion_notify ( widget *wid, gint x, gint y );
 
 static void _listview_draw ( widget *wid, cairo_t *draw )
 {
@@ -499,10 +503,15 @@ static void listview_recompute_elements ( listview *lv )
         widget_free ( WIDGET ( lv->boxes[i].box ) );
     }
     lv->boxes = g_realloc ( lv->boxes, newne * sizeof ( _listview_row ) );
-    if ( newne > 0   ) {
+    if ( newne > 0 ) {
         for ( unsigned int i = lv->cur_elements; i < newne; i++ ) {
             listview_create_row ( lv, &( lv->boxes[i] ) );
-            widget_set_trigger_action_handler ( WIDGET ( lv->boxes[i].box ), listview_element_trigger_action, lv );
+            widget *wid = WIDGET ( lv->boxes[i].box );
+            widget_set_trigger_action_handler ( wid, listview_element_trigger_action, lv );
+            if ( wid != NULL ) {
+                wid->motion_notify = listview_element_motion_notify;
+            }
+
             listview_set_state ( lv->boxes[i], NORMAL );
         }
     }
@@ -515,7 +524,7 @@ void listview_set_num_elements ( listview *lv, unsigned int rows )
     if ( lv == NULL ) {
         return;
     }
-    TICK_N ( __FUNCTION__ );
+    TICK_N ( "listview_set_num_elements" );
     lv->req_elements = rows;
     listview_set_selected ( lv, lv->selected );
     TICK_N ( "Set selected" );
@@ -556,7 +565,7 @@ static void listview_resize ( widget *wid, short w, short h )
                   lv->widget.w - widget_padding_get_right ( WIDGET ( lv ) ) - widget_get_width ( WIDGET ( lv->scrollbar ) ),
                   widget_padding_get_top ( WIDGET ( lv ) ) );
 
-    widget_resize (  WIDGET ( lv->scrollbar ), widget_get_width ( WIDGET ( lv->scrollbar ) ), height );
+    widget_resize ( WIDGET ( lv->scrollbar ), widget_get_width ( WIDGET ( lv->scrollbar ) ), height );
 
     if ( lv->type == BARVIEW ) {
         lv->max_elements = lv->menu_lines;
@@ -640,6 +649,19 @@ static WidgetTriggerActionResult listview_element_trigger_action ( widget *wid, 
     return WIDGET_TRIGGER_ACTION_RESULT_HANDLED;
 }
 
+static gboolean listview_element_motion_notify ( widget *wid, G_GNUC_UNUSED gint x, G_GNUC_UNUSED gint y )
+{
+    listview     *lv = (listview *) wid->parent;
+    unsigned int max = MIN ( lv->cur_elements, lv->req_elements - lv->last_offset );
+    unsigned int i;
+    for ( i = 0; i < max && WIDGET ( lv->boxes[i].box ) != wid; i++ ) {
+    }
+    if ( i < max && i != listview_get_selected ( lv ) ) {
+        listview_set_selected ( lv, lv->last_offset + i );
+    }
+    return TRUE;
+}
+
 listview *listview_create ( widget *parent, const char *name, listview_update_callback cb, void *udata, unsigned int eh, gboolean reverse )
 {
     listview *lv = g_malloc0 ( sizeof ( listview ) );
@@ -677,7 +699,7 @@ listview *listview_create ( widget *parent, const char *name, listview_update_ca
 
     // Some settings.
     lv->spacing         = rofi_theme_get_distance ( WIDGET ( lv ), "spacing", DEFAULT_SPACING );
-    lv->menu_columns    = rofi_theme_get_integer  ( WIDGET ( lv ), "columns", config.menu_columns );
+    lv->menu_columns    = rofi_theme_get_integer  ( WIDGET ( lv ), "columns", DEFAULT_MENU_COLUMNS);
     lv->fixed_num_lines = rofi_theme_get_boolean  ( WIDGET ( lv ), "fixed-height", config.fixed_num_lines );
     lv->dynamic         = rofi_theme_get_boolean  ( WIDGET ( lv ), "dynamic", TRUE );
     lv->reverse         = rofi_theme_get_boolean  ( WIDGET ( lv ), "reverse", reverse );
@@ -768,6 +790,9 @@ void listview_nav_left ( listview *lv )
 void listview_nav_right ( listview *lv )
 {
     if ( lv == NULL ) {
+        return;
+    }
+    if ( lv->max_rows == 0 ) {
         return;
     }
     if ( lv->type == BARVIEW ) {
@@ -960,7 +985,7 @@ gboolean listview_get_fixed_num_lines ( listview *lv )
 }
 void listview_set_fixed_num_lines ( listview *lv )
 {
-    if ( lv  ) {
+    if ( lv ) {
         lv->fixed_num_lines = TRUE;
     }
 }

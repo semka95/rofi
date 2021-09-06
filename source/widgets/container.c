@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -26,7 +26,7 @@
  */
 
 /** The log domain of this widget. */
-#define G_LOG_DOMAIN    "Widgets.Window"
+#define G_LOG_DOMAIN    "Widgets.Container"
 
 #include <config.h>
 #include <stdio.h>
@@ -35,13 +35,13 @@
 #include "widgets/container.h"
 #include "theme.h"
 
-struct _window
+struct _container
 {
     widget widget;
     widget *child;
 };
 
-static void container_update ( widget *wid  );
+static void container_update ( widget *wid );
 
 static int container_get_desired_height ( widget *widget )
 {
@@ -75,7 +75,7 @@ void container_add ( container *container, widget *child )
         return;
     }
     container->child = child;
-    g_assert ( child->parent == WIDGET ( container  ) );
+    g_assert ( child->parent == WIDGET ( container ) );
     widget_update ( WIDGET ( container ) );
 }
 
@@ -122,7 +122,7 @@ container * container_create ( widget *parent, const char *name )
     return b;
 }
 
-static void container_update ( widget *wid  )
+static void container_update ( widget *wid )
 {
     container *b = (container *) wid;
     if ( b->child && b->child->enabled ) {

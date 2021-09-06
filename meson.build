@@ -1,5 +1,5 @@
 project('rofi', 'c',
-    version: '1.6.1-wayland',
+    version: '1.6.1-wayland-dev',
     meson_version: '>=0.47.0',
     license: [ 'MIT' ],
     default_options: [
@@ -41,6 +41,8 @@ plugins_deps = [
     dependency('cairo'),
 ]
 
+dep_lm = c_compiler.find_library('m', required : false)
+
 deps = [
     plugins_deps,
     dependency('gio-unix-2.0'),
@@ -48,27 +50,26 @@ deps = [
     dependency('pangocairo'),
     dependency('xkbcommon'),
     dependency('gdk-pixbuf-2.0'),
+    dep_lm,
 ]
 
 
-gwxcb = subproject('xcb')
+libgwater = subproject('libgwater')
 # XCB stuff
 deps += [
-    gwxcb.get_variable('libgwater_xcb'),
+    libgwater.get_variable('libgwater_xcb'),
+    dependency('xcb'),
     dependency('xcb-aux'),
     dependency('xcb-xkb'),
     dependency('xkbcommon-x11'),
     dependency('xcb-ewmh'),
     dependency('xcb-icccm'),
-    dependency('xcb-xrm'),
     dependency('xcb-randr'),
+    dependency('xcb-cursor'),
     dependency('xcb-xinerama'),
     dependency('cairo-xcb'),
     dependency('libstartup-notification-1.0'),
 ]
-
-libgif = c_compiler.find_library('libgif', required: false)
-deps += [ libgif ]
 
 wayland_client = dependency('wayland-client', required: get_option('wayland'))
 wayland_protocols = dependency('wayland-protocols', required: get_option('wayland'))
@@ -77,7 +78,7 @@ if wayland_client.found()
     deps += wayland_client
     deps += wayland_protocols
     deps += wayland_cursor
-    deps += subproject('libgwater-wayland').get_variable('libgwater_wayland')
+    deps += libgwater.get_variable('libgwater_wayland')
 endif
 
 check = dependency('check', version: '>= 0.11.0', required: get_option('check'))
@@ -90,7 +91,6 @@ header_conf.set_quoted('GETTEXT_PACKAGE', meson.project_name())
 header_conf.set_quoted('PACKAGE_BUGREPORT', 'https://github.com/davatorium/rofi/')
 header_conf.set_quoted('PACKAGE_URL', 'https://reddit.com/r/qtools/')
 
-header_conf.set('THEME_CONVERTER', true)
 header_conf.set('_GNU_SOURCE', true)
 
 header_conf.set('USE_NK_GIT_VERSION', true)
@@ -99,7 +99,6 @@ header_conf.set('GLIB_VERSION_MIN_REQUIRED', '(G_ENCODE_VERSION(@0@,@1@))'.forma
 header_conf.set('GLIB_VERSION_MAX_ALLOWED', '(G_ENCODE_VERSION(@0@,@1@))'.format(glib_min_major, glib_min_minor))
 
 header_conf.set('ENABLE_DRUN', get_option('drun'))
-header_conf.set('HAVE_LIBGIF', libgif.found())
 header_conf.set('WINDOW_MODE', get_option('window'))
 
 header_conf.set('ENABLE_WAYLAND', wayland_client.found())
@@ -297,6 +296,7 @@ install_data(
     'themes/blue.rasi',
     'themes/c64.rasi',
     'themes/dmenu.rasi',
+    'themes/docu.rasi',
     'themes/glue_pro_blue.rasi',
     'themes/gruvbox-common.rasi',
     'themes/gruvbox-dark-hard.rasi',
@@ -312,6 +312,8 @@ install_data(
     'themes/solarized.rasi',
     'themes/solarized_alternate.rasi',
     'themes/fancy.rasi',
+    'themes/iggy.rasi',
+    'themes/iggy.jpg',
     install_dir: themedir
 )
 
@@ -344,6 +346,7 @@ test('helper_pidfile test', executable('helper_pidfile.test', [
     ],
     objects: rofi.extract_objects([
         'config/config.c',
+        'source/theme.c',
         'source/helper.c',
         'source/xrmoptions.c',
         'source/rofi-types.c',
@@ -423,6 +426,7 @@ test('helper test', executable('helper.test', [
     ],
     objects: rofi.extract_objects([
         'config/config.c',
+        'source/theme.c',
         'source/helper.c',
         'source/xrmoptions.c',
         'source/rofi-types.c',
@@ -435,6 +439,7 @@ test('helper_expand test', executable('helper_expand.test', [
     ],
     objects: rofi.extract_objects([
         'config/config.c',
+        'source/theme.c',
         'source/helper.c',
         'source/xrmoptions.c',
         'source/rofi-types.c',
@@ -447,6 +452,7 @@ test('helper_config_cmdline_parser test', executable('helper_config_cmdline_pars
     ],
     objects: rofi.extract_objects([
         'config/config.c',
+        'source/theme.c',
         'source/helper.c',
         'source/xrmoptions.c',
         'source/rofi-types.c',
@@ -480,6 +486,7 @@ if check.found()
             'config/config.c',
             'source/dialogs/help-keys.c',
             'source/helper.c',
+            'source/theme.c',
             'source/mode.c',
             'source/xrmoptions.c',
             'source/rofi-types.c',
@@ -494,6 +501,7 @@ if check.found()
         objects: rofi.extract_objects([
             'config/config.c',
             'source/helper.c',
+            'source/theme.c',
             'source/xrmoptions.c',
             'source/rofi-types.c',
         ]),

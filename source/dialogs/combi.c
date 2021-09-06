@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -76,7 +76,7 @@ static void combi_mode_parse_switchers ( Mode *sw )
                                                    sizeof ( CombiMode ) * ( pd->num_switchers + 1 ) );
 
         Mode *mode = rofi_collect_modi_search ( token );
-        if (  mode != NULL ) {
+        if ( mode != NULL ) {
             pd->switchers[pd->num_switchers].disable = FALSE;
             pd->switchers[pd->num_switchers++].mode  = mode;
             continue;
@@ -172,6 +172,8 @@ static ModeMode combi_mode_result ( Mode *sw, int mretv, char **input, unsigned 
             }
             return MODE_EXIT;
         }
+    } else if ( ( mretv& MENU_COMPLETE) ) {
+        return RELOAD_DIALOG;
     }
 
     for ( unsigned i = 0; i < pd->num_switchers; i++ ) {
@@ -180,7 +182,7 @@ static ModeMode combi_mode_result ( Mode *sw, int mretv, char **input, unsigned 
             return mode_result ( pd->switchers[i].mode, mretv, input, selected_line - pd->starts[i] );
         }
     }
-    if ( ( mretv & MENU_CUSTOM_INPUT )  ) {
+    if ( ( mretv & MENU_CUSTOM_INPUT ) ) {
         return mode_result ( pd->switchers[0].mode, mretv, input, selected_line );
     }
     return MODE_EXIT;
@@ -216,22 +218,22 @@ static char * combi_mgrv ( const Mode *sw, unsigned int selected_line, int *stat
             char       * str  = retv = mode_get_display_value ( pd->switchers[i].mode, selected_line - pd->starts[i], state, attr_list, TRUE );
             const char *dname = mode_get_display_name ( pd->switchers[i].mode );
             if ( !config.combi_hide_mode_prefix ) {
-                retv = g_strdup_printf ( "%s %s", dname, str );
-                g_free ( str );
-            }
+              retv = g_strdup_printf ( "%s %s", dname, str );
+              g_free ( str );
 
-            if ( attr_list != NULL ) {
-                ThemeWidget *wid = rofi_theme_find_widget ( sw->name, NULL, TRUE );
+              if ( attr_list != NULL ) {
+                ThemeWidget *wid = rofi_config_find_widget ( sw->name, NULL, TRUE );
                 Property    *p   = rofi_theme_find_property ( wid, P_COLOR, pd->switchers[i].mode->name, TRUE );
                 if ( p != NULL ) {
-                    PangoAttribute *pa = pango_attr_foreground_new (
-                        p->value.color.red * 65535,
-                        p->value.color.green * 65535,
-                        p->value.color.blue * 65535 );
-                    pa->start_index = PANGO_ATTR_INDEX_FROM_TEXT_BEGINNING;
-                    pa->end_index   = strlen ( dname );
-                    *attr_list      = g_list_append ( *attr_list, pa );
+                  PangoAttribute *pa = pango_attr_foreground_new (
+                      p->value.color.red * 65535,
+                      p->value.color.green * 65535,
+                      p->value.color.blue * 65535 );
+                  pa->start_index = PANGO_ATTR_INDEX_FROM_TEXT_BEGINNING;
+                  pa->end_index   = strlen ( dname );
+                  *attr_list      = g_list_append ( *attr_list, pa );
                 }
+              }
             }
             return retv;
         }

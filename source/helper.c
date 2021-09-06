@@ -3,7 +3,7 @@
  *
  * MIT/X11 License
  * Copyright © 2012 Sean Pringle <sean.pringle@gmail.com>
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -66,9 +66,9 @@ const char *const monitor_position_entries[] = {
     "on monitor that has mouse pointer"
 };
 /** copy of the argc for use in commandline argument parser. */
-static int        stored_argc = 0;
+int        stored_argc = 0;
 /** copy of the argv pointer for use in the commandline argument parser */
-static char       **stored_argv = NULL;
+char       **stored_argv = NULL;
 
 char *helper_string_replace_if_exists_v ( char * string, GHashTable *h );
 
@@ -179,6 +179,14 @@ static gchar *fuzzy_to_regex ( const char * input )
     return retv;
 }
 
+static gchar *prefix_regex ( const char * input )
+{
+    gchar *r    = g_regex_escape_string ( input, -1 );
+    char  *retv = g_strconcat ( "\\b", r, NULL );
+    g_free ( r );
+    return retv;
+}
+
 static char *utf8_helper_simplify_string ( const char *s )
 {
     gunichar buf2[G_UNICHAR_MAX_DECOMPOSITION_LENGTH] = { 0, };
@@ -204,7 +212,7 @@ static char *utf8_helper_simplify_string ( const char *s )
 }
 
 // Macro for quickly generating regex for matching.
-static inline GRegex * R ( const char *s, int case_sensitive  )
+static inline GRegex * R ( const char *s, int case_sensitive )
 {
     if ( config.normalize_match ) {
         char   *str = utf8_helper_simplify_string ( s );
@@ -245,6 +253,11 @@ static rofi_int_matcher * create_regex ( const char *input, int case_sensitive )
         break;
     case MM_FUZZY:
         r    = fuzzy_to_regex ( input );
+        retv = R ( r, case_sensitive );
+        g_free ( r );
+        break;
+    case MM_PREFIX:
+        r    = prefix_regex ( input );
         retv = R ( r, case_sensitive );
         g_free ( r );
         break;
@@ -322,7 +335,7 @@ const char ** find_arg_strv ( const char *const key )
     const char **retv = NULL;
     int        length = 0;
     for ( int i = 0; i < stored_argc; i++ ) {
-        if (  i < ( stored_argc - 1 ) && strcasecmp ( stored_argv[i], key ) == 0 ) {
+        if ( i < ( stored_argc - 1 ) && strcasecmp ( stored_argv[i], key ) == 0 ) {
             length++;
         }
     }
@@ -632,29 +645,21 @@ int config_sanity_check ( void )
         else if ( g_strcmp0 ( config.matching, "normal" ) == 0 ) {
             config.matching_method = MM_NORMAL;;
         }
+        else if ( g_strcmp0 ( config.matching, "prefix" ) == 0 ) {
+            config.matching_method = MM_PREFIX;
+        }
         else {
-            g_string_append_printf ( msg, "\t<b>config.matching</b>=%s is not a valid matching strategy.\nValid options are: glob, regex, fuzzy or normal.\n",
+            g_string_append_printf ( msg, "\t<b>config.matching</b>=%s is not a valid matching strategy.\nValid options are: glob, regex, fuzzy, prefix or normal.\n",
                                      config.matching );
             found_error = 1;
         }
     }
 
     if ( config.element_height < 1 ) {
-        g_string_append_printf ( msg, "\t<b>config.element_height</b>=%d is invalid. An element needs to be atleast 1 line high.\n",
+        g_string_append_printf ( msg, "\t<b>config.element_height</b>=%d is invalid. An element needs to be at least 1 line high.\n",
                                  config.element_height );
         config.element_height = 1;
         found_error           = TRUE;
-    }
-    if ( config.menu_columns == 0 ) {
-        g_string_append_printf ( msg, "\t<b>config.menu_columns</b>=%d is invalid. You need at least one visible column.\n",
-                                 config.menu_columns );
-        config.menu_columns = 1;
-        found_error         = TRUE;
-    }
-    if ( config.menu_width == 0 ) {
-        g_string_append_printf ( msg, "<b>config.menu_width</b>=0 is invalid. You cannot have a window with no width." );
-        config.menu_columns = 50;
-        found_error         = TRUE;
     }
     if ( !( config.location >= 0 && config.location <= 8 ) ) {
         g_string_append_printf ( msg, "\t<b>config.location</b>=%d is invalid. Value should be between %d and %d.\n",
@@ -694,8 +699,7 @@ int config_sanity_check ( void )
 
     if ( g_strcmp0 ( config.monitor, "-3" ) == 0 ) {
         // On -3, set to location 1.
-        config.location   = 1;
-        config.fullscreen = 0;
+        config.location = 1;
     }
 
     if ( found_error ) {
@@ -903,33 +907,6 @@ static int rofi_scorer_get_score_for ( enum CharClass prev, enum CharClass curr 
     return 0;
 }
 
-/**
- * @param pattern   The user input to match against.
- * @param plen      Pattern length.
- * @param str       The input to match against pattern.
- * @param slen      Length of str.
- *
- *  rofi_scorer_fuzzy_evaluate implements a global sequence alignment algorithm to find the maximum accumulated score by
- *  aligning `pattern` to `str`. It applies when `pattern` is a subsequence of `str`.
- *
- *  Scoring criteria
- *  - Prefer matches at the start of a word, or the start of subwords in CamelCase/camelCase/camel123 words. See WORD_START_SCORE/CAMEL_SCORE.
- *  - Non-word characters matter. See NON_WORD_SCORE.
- *  - The first characters of words of `pattern` receive bonus because they usually have more significance than the rest.
- *  See PATTERN_START_MULTIPLIER/PATTERN_NON_START_MULTIPLIER.
- *  - Superfluous characters in `str` will reduce the score (gap penalty). See GAP_SCORE.
- *  - Prefer early occurrence of the first character. See LEADING_GAP_SCORE/GAP_SCORE.
- *
- *  The recurrence of the dynamic programming:
- *  dp[i][j]: maximum accumulated score by aligning pattern[0..i] to str[0..j]
- *  dp[0][j] = leading_gap_penalty(0, j) + score[j]
- *  dp[i][j] = max(dp[i-1][j-1] + CONSECUTIVE_SCORE, max(dp[i-1][k] + gap_penalty(k+1, j) + score[j] : k < j))
- *
- *  The first dimension can be suppressed since we do not need a matching scheme, which reduces the space complexity from
- *  O(N*M) to O(M)
- *
- * @returns the sorting weight.
- */
 int rofi_scorer_fuzzy_evaluate ( const char *pattern, glong plen, const char *str, glong slen )
 {
     if ( slen > FUZZY_SCORER_MAX_LENGTH ) {
@@ -1027,7 +1004,7 @@ gboolean helper_execute ( const char *wd, char **args, const char *error_precmd,
     g_spawn_async ( wd, args, NULL, G_SPAWN_SEARCH_PATH, child_setup, user_data, NULL, &error );
     if ( error != NULL ) {
         char *msg = g_strdup_printf ( "Failed to execute: '%s%s'\nError: '%s'", error_precmd, error_cmd, error->message );
-        rofi_view_error_dialog ( msg, FALSE  );
+        rofi_view_error_dialog ( msg, FALSE );
         g_free ( msg );
         // print error.
         g_error_free ( error );
@@ -1077,7 +1054,7 @@ gboolean helper_execute_command ( const char *wd, const char *cmd, gboolean run_
     return helper_execute ( wd, args, "", cmd, context );
 }
 
-char *helper_get_theme_path ( const char *file )
+char *helper_get_theme_path ( const char *file, const char *ext )
 {
     char *filename = rofi_expand_path ( file );
     g_debug ( "Opening theme, testing: %s\n", filename );
@@ -1086,11 +1063,11 @@ char *helper_get_theme_path ( const char *file )
     }
     g_free ( filename );
 
-    if ( g_str_has_suffix ( file, ".rasi" ) ) {
+    if ( g_str_has_suffix ( file, ext ) ) {
         filename = g_strdup ( file );
     }
     else {
-        filename = g_strconcat ( file, ".rasi", NULL );
+        filename = g_strconcat ( file, ext, NULL );
     }
     // Check config's themes directory.
     const char *cpath = g_get_user_config_dir ();
@@ -1138,18 +1115,22 @@ char *helper_get_theme_path ( const char *file )
     return filename;
 }
 
-static void parse_pair ( char  *input, rofi_range_pair  *item )
+static gboolean parse_pair ( char  *input, rofi_range_pair  *item )
 {
     // Skip leading blanks.
     while ( input != NULL && isblank ( *input ) ) {
         ++input;
     }
 
+    if ( input == NULL ) {
+        return FALSE;
+    }
+
     const char *sep[]   = { "-", ":" };
     int        pythonic = ( strchr ( input, ':' ) || input[0] == '-' ) ? 1 : 0;
     int        index    = 0;
 
-    for (  char *token = strsep ( &input, sep[pythonic] ); token != NULL; token = strsep ( &input, sep[pythonic] ) ) {
+    for ( char *token = strsep ( &input, sep[pythonic] ); token != NULL; token = strsep ( &input, sep[pythonic] ) ) {
         if ( index == 0 ) {
             item->start = item->stop = (int) strtol ( token, NULL, 10 );
             index++;
@@ -1166,6 +1147,7 @@ static void parse_pair ( char  *input, rofi_range_pair  *item )
             --item->stop;
         }
     }
+    return TRUE;
 }
 void parse_ranges ( char *input, rofi_range_pair **list, unsigned int *length )
 {
@@ -1178,29 +1160,11 @@ void parse_ranges ( char *input, rofi_range_pair **list, unsigned int *length )
         // Make space.
         *list = g_realloc ( ( *list ), ( ( *length ) + 1 ) * sizeof ( struct rofi_range_pair ) );
         // Parse a single pair.
-        parse_pair ( token, &( ( *list )[*length] ) );
-
-        ( *length )++;
+        if ( parse_pair ( token, &( ( *list )[*length] ) ) ) {
+            ( *length )++;
+        }
     }
 }
-/**
- * @param format The format string used. See below for possible syntax.
- * @param string The selected entry.
- * @param selected_line The selected line index.
- * @param filter The entered filter.
- *
- * Function that outputs the selected line in the user-specified format.
- * Currently the following formats are supported:
- *   * i: Print the index (0-(N-1))
- *   * d: Print the index (1-N)
- *   * s: Print input string.
- *   * q: Print quoted input string.
- *   * f: Print the entered filter.
- *   * F: Print the entered filter, quoted
- *
- * This functions outputs the formatted string to stdout, appends a newline (\n) character and
- * calls flush on the file descriptor.
- */
 void rofi_output_formatted_line ( const char *format, const char *string, int selected_line, const char *filter )
 {
     for ( int i = 0; format && format[i]; i++ ) {
@@ -1335,7 +1299,7 @@ char *helper_string_replace_if_exists_v ( char * string, GHashTable *h )
     char   *res   = NULL;
 
     // Replace hits within {-\w+}.
-    GRegex *reg = g_regex_new ( "\\[(.*)({[-\\w]+})(.*)\\]|({[\\w-]+})", 0, 0, &error );
+    GRegex *reg = g_regex_new ( "\\[(.*)({[-\\w]+})(.*)\\]|({[\\w-]+})", G_REGEX_UNGREEDY, 0, &error );
     if ( error == NULL ) {
         res = g_regex_replace_eval ( reg, string, -1, 0, 0, helper_eval_cb2, h, &error );
     }

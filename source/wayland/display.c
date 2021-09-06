@@ -528,7 +528,8 @@ wayland_pointer_send_events ( wayland_seat *self )
     }
 
     if ( self->motion.x > -1 || self->motion.y > -1 ) {
-        rofi_view_handle_mouse_motion ( state, self->motion.x, self->motion.y );
+        // TODO: hover select
+        rofi_view_handle_mouse_motion ( state, self->motion.x, self->motion.y, FALSE);
         self->motion.x = -1;
         self->motion.y = -1;
     }
@@ -549,7 +550,7 @@ wayland_pointer_send_events ( wayland_seat *self )
 
     if ( self->button.button >= 0 ) {
         if ( self->button.pressed ) {
-            rofi_view_handle_mouse_motion ( state, self->button.x, self->button.y );
+            rofi_view_handle_mouse_motion ( state, self->button.x, self->button.y, FALSE );
             nk_bindings_seat_handle_button ( wayland->bindings_seat, NULL, button, NK_BINDINGS_BUTTON_STATE_PRESS, self->button.time );
         }
         else {
@@ -1171,6 +1172,14 @@ static int wayland_display_monitor_active ( workarea *mon )
     return FALSE;
 }
 
+static void wayland_display_set_input_focus ( guint w )
+{
+}
+
+static void wayland_display_revert_input_focus ( void )
+{
+}
+
 static const struct _view_proxy* wayland_display_view_proxy ( void )
 {
     return wayland_view_proxy;
@@ -1189,6 +1198,8 @@ static display_proxy  display_ = {
     .dump_monitor_layout  = wayland_display_dump_monitor_layout,
     .startup_notification = wayland_display_startup_notification,
     .monitor_active       = wayland_display_monitor_active,
+    .set_input_focus      = wayland_display_set_input_focus,
+    .revert_input_focus   = wayland_display_revert_input_focus,
     .scale                = wayland_display_scale,
 
     .view                 = wayland_display_view_proxy,

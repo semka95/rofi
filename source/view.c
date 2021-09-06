@@ -2,7 +2,7 @@
  * rofi
  *
  * MIT/X11 License
- * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2013-2021 Qball Cow <qball@gmpclient.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -82,6 +82,7 @@ struct _rofi_view_cache_state CacheState = {
     .main_window = XCB_WINDOW_NONE,
     .flags       = MENU_NORMAL,
     .views       = G_QUEUE_INIT,
+    .user_timeout = 0,
 };
 
 static char * get_matching_state ( void )
@@ -136,6 +137,47 @@ static void rofi_view_reload_message_bar ( RofiViewState *state )
     else {
         widget_disable ( WIDGET ( state->mesg_box ) );
     }
+}
+
+static gboolean rofi_view_user_timeout ( G_GNUC_UNUSED gpointer data )
+{
+    CacheState.user_timeout = 0;
+    ThemeWidget *wid = rofi_config_find_widget ( "timeout", NULL, TRUE );
+    if ( wid ) {
+      /** Check string property */
+      Property    *p   = rofi_theme_find_property ( wid, P_STRING, "action", TRUE);
+      if ( p != NULL && p->type == P_STRING ) {
+        const char *action = p->value.s;
+        guint id = key_binding_get_action_from_name(action);
+        if ( id != UINT32_MAX )
+        {
+          rofi_view_trigger_action ( rofi_view_get_active (), SCOPE_GLOBAL, id);
+        } else {
+          g_warning("Failed to parse keybinding: %s\r\n", action);
+        }
+      }
+    }
+    return G_SOURCE_REMOVE;
+}
+
+static void rofi_view_set_user_timeout ( G_GNUC_UNUSED gpointer data )
+{
+  if ( CacheState.user_timeout > 0 ) {
+    g_source_remove ( CacheState.user_timeout );
+    CacheState.user_timeout = 0;
+  }
+  {
+    /** Find the widget */
+    ThemeWidget *wid = rofi_config_find_widget ( "timeout", NULL, TRUE );
+    if ( wid ) {
+      /** Check string property */
+      Property    *p   = rofi_theme_find_property ( wid, P_INTEGER, "delay", TRUE);
+      if ( p != NULL && p->type == P_INTEGER && p->value.i > 0 ) {
+        int delay = p->value.i;
+        CacheState.user_timeout = g_timeout_add ( delay*1000 , rofi_view_user_timeout, NULL );
+      }
+    }
+  }
 }
 
 void rofi_view_restart ( RofiViewState *state )
@@ -330,7 +372,7 @@ static void filter_elements ( thread_state *ts, G_GNUC_UNUSED gpointer user_data
             t->count++;
         }
     }
-    if ( t->acount != NULL  ) {
+    if ( t->acount != NULL ) {
         g_mutex_lock ( t->mutex );
         ( *( t->acount ) )--;
         g_cond_signal ( t->cond );
@@ -439,7 +481,7 @@ static void update_callback ( textbox *t, icon *ico, unsigned int index, void *u
             icon_set_surface ( ico, icon );
         }
 
-        if ( state->tokens && config.show_match ) {
+        if ( state->tokens ) {
             RofiHighlightColorStyle th = { ROFI_HL_BOLD | ROFI_HL_UNDERLINE, { 0.0, 0.0, 0.0, 0.0 } };
             th = rofi_theme_get_highlight ( WIDGET ( t ), "highlight", th );
             helper_token_match_get_pango_attr ( th, state->tokens, textbox_get_visible_text ( t ), list );
@@ -474,6 +516,9 @@ static void _rofi_view_reload_row ( RofiViewState *state )
 
 void rofi_view_refilter ( RofiViewState *state )
 {
+    if ( state->sw == NULL ) {
+        return;
+    }
     TICK_N ( "Filter start" );
     if ( state->reload ) {
         _rofi_view_reload_row ( state );
@@ -567,7 +612,7 @@ void rofi_view_refilter ( RofiViewState *state )
     TICK_N ( "Update filter lines" );
 
     if ( config.auto_select == TRUE && state->filtered_lines == 1 && state->num_lines > 1 ) {
-        ( state->selected_line ) = state->line_map[listview_get_selected ( state->list_view  )];
+        ( state->selected_line ) = state->line_map[listview_get_selected ( state->list_view )];
         state->retv              = MENU_OK;
         state->quit              = TRUE;
     }
@@ -643,6 +688,17 @@ static void rofi_view_trigger_global_action ( KeyBindingAction action )
         ( state->selected_line ) = 0;
         state->quit              = TRUE;
         break;
+    case MODE_COMPLETE:
+        {
+            unsigned int selected = listview_get_selected ( state->list_view );
+            state->selected_line = UINT32_MAX;
+            if ( selected < state->filtered_lines ) {
+                state->selected_line     = state->line_map[selected];
+            }
+            state->retv              = MENU_COMPLETE;
+            state->quit              = TRUE;
+            break;
+        }
     // Toggle case sensitivity.
     case TOGGLE_CASE_SENSITIVITY:
         if ( state->case_indicator != NULL ) {
@@ -806,6 +862,13 @@ static void rofi_view_trigger_global_action ( KeyBindingAction action )
         state->quit          = TRUE;
         break;
     }
+    case ACCEPT_CUSTOM_ALT:
+    {
+        state->selected_line = UINT32_MAX;
+        state->retv          = MENU_CUSTOM_INPUT | MENU_CUSTOM_ACTION;
+        state->quit          = TRUE;
+        break;
+    }
     case ACCEPT_ENTRY:
     {
         // If a valid item is selected, return that..
@@ -828,6 +891,7 @@ static void rofi_view_trigger_global_action ( KeyBindingAction action )
 
 gboolean rofi_view_trigger_action ( RofiViewState *state, BindingsScope scope, guint action )
 {
+    rofi_view_set_user_timeout ( NULL );
     switch ( scope )
     {
     case SCOPE_GLOBAL:
@@ -840,7 +904,7 @@ gboolean rofi_view_trigger_action ( RofiViewState *state, BindingsScope scope, g
     case SCOPE_MOUSE_MODE_SWITCHER:
     {
         gint   x = state->mouse.x, y = state->mouse.y;
-        widget *target = widget_find_mouse_target ( WIDGET ( state->main_window ), scope, x, y );
+        widget *target = widget_find_mouse_target ( WIDGET ( state->main_window ), (WidgetType) scope, x, y );
         if ( target == NULL ) {
             return FALSE;
         }
@@ -871,13 +935,58 @@ void rofi_view_handle_text ( RofiViewState *state, char *text )
     }
 }
 
-void rofi_view_handle_mouse_motion ( RofiViewState *state, gint x, gint y )
+#if 0
+static X11CursorType rofi_cursor_type_to_x11_cursor_type ( RofiCursorType type )
+{
+    switch ( type )
+    {
+    case ROFI_CURSOR_DEFAULT:
+        return CURSOR_DEFAULT;
+
+    case ROFI_CURSOR_POINTER:
+        return CURSOR_POINTER;
+
+    case ROFI_CURSOR_TEXT:
+        return CURSOR_TEXT;
+    }
+
+    return CURSOR_DEFAULT;
+}
+#endif
+
+static RofiCursorType rofi_view_resolve_cursor ( RofiViewState *state, gint x, gint y )
+{
+    widget *target = widget_find_mouse_target ( WIDGET ( state->main_window ), WIDGET_TYPE_UNKNOWN, x, y );
+
+    return target != NULL
+           ? target->cursor_type
+           : ROFI_CURSOR_DEFAULT;
+}
+
+void rofi_view_handle_mouse_motion ( RofiViewState *state, gint x, gint y, gboolean find_mouse_target )
 {
     state->mouse.x = x;
     state->mouse.y = y;
+
+    RofiCursorType cursor_type = rofi_view_resolve_cursor ( state, x, y );
+
+    rofi_view_set_cursor ( cursor_type );
+
+    if ( find_mouse_target ) {
+        widget *target = widget_find_mouse_target ( WIDGET ( state->main_window ), WIDGET_TYPE_LISTVIEW_ELEMENT, x, y );
+
+        if ( target != NULL ) {
+            state->mouse.motion_target = target;
+        }
+    }
+
     if ( state->mouse.motion_target != NULL ) {
         widget_xy_to_relative ( state->mouse.motion_target, &x, &y );
         widget_motion_notify ( state->mouse.motion_target, x, y );
+
+        if ( find_mouse_target ) {
+            state->mouse.motion_target = NULL;
+        }
     }
 }
 
@@ -888,27 +997,16 @@ static WidgetTriggerActionResult textbox_button_trigger_action ( widget *wid, Mo
     {
     case MOUSE_CLICK_DOWN:
     {
-        const char * type = rofi_theme_get_string ( wid, "action", "ok" );
-        ( state->selected_line ) = state->line_map[listview_get_selected ( state->list_view )];
-        if ( strcmp ( type, "ok" ) == 0 ) {
-            state->retv = MENU_OK;
+        const char * type = rofi_theme_get_string ( wid, "action", NULL );
+        if ( type ) {
+          ( state->selected_line ) = state->line_map[listview_get_selected ( state->list_view )];
+          guint id = key_binding_get_action_from_name(type);
+          if ( id != UINT32_MAX ) {
+            rofi_view_trigger_global_action ( id );
+          }
+          state->skip_absorb = TRUE;
+          return WIDGET_TRIGGER_ACTION_RESULT_HANDLED;
         }
-        else if ( strcmp ( type, "ok|alternate" ) == 0 ) {
-            state->retv = MENU_CUSTOM_ACTION | MENU_OK;
-        }
-        else if ( strcmp ( type, "custom" ) ) {
-            state->retv = MENU_CUSTOM_INPUT;
-        }
-        else if ( strcmp ( type, "custom|alternate" ) == 0 ) {
-            state->retv = MENU_CUSTOM_ACTION | MENU_CUSTOM_INPUT;
-        }
-        else {
-            g_warning ( "Invalid action specified." );
-            return WIDGET_TRIGGER_ACTION_RESULT_IGNORED;
-        }
-        state->quit        = TRUE;
-        state->skip_absorb = TRUE;
-        return WIDGET_TRIGGER_ACTION_RESULT_HANDLED;
     }
     case MOUSE_CLICK_UP:
     case MOUSE_DCLICK_DOWN:
@@ -1065,7 +1163,7 @@ static void rofi_view_add_widget ( RofiViewState *state, widget *parent_widget, 
         listview_set_scroll_type ( state->list_view, config.scroll_method );
         listview_set_mouse_activated_cb ( state->list_view, rofi_view_listview_mouse_activated_cb, state );
 
-        int lines = rofi_theme_get_integer ( WIDGET ( state->list_view ), "lines", config.menu_lines );
+        int lines = rofi_theme_get_integer ( WIDGET ( state->list_view ), "lines", DEFAULT_MENU_LINES );
         listview_set_num_lines ( state->list_view, lines );
         listview_set_max_lines ( state->list_view, state->num_lines );
     }
@@ -1084,7 +1182,7 @@ static void rofi_view_add_widget ( RofiViewState *state, widget *parent_widget, 
         for ( unsigned int j = 0; j < state->num_modi; j++ ) {
             const Mode * mode = rofi_get_mode ( j );
             state->modi[j] = textbox_create ( WIDGET ( state->sidebar_bar ), WIDGET_TYPE_MODE_SWITCHER, "button", TB_AUTOHEIGHT, ( mode == state->sw ) ? HIGHLIGHT : NORMAL,
-                                              mode_get_display_name ( mode  ), 0.5, 0.5 );
+                                              mode_get_display_name ( mode ), 0.5, 0.5 );
             box_add ( state->sidebar_bar, WIDGET ( state->modi[j] ), TRUE );
             widget_set_trigger_action_handler ( WIDGET ( state->modi[j] ), textbox_sidebar_modi_trigger_action, state );
         }
@@ -1094,18 +1192,24 @@ static void rofi_view_add_widget ( RofiViewState *state, widget *parent_widget, 
         box_add ( (box *) parent_widget, WIDGET ( state->overlay ), FALSE );
         widget_disable ( WIDGET ( state->overlay ) );
     }
-    else if (  g_ascii_strncasecmp ( name, "textbox", 7 ) == 0 ) {
+    else if ( g_ascii_strncasecmp ( name, "textbox", 7 ) == 0 ) {
         textbox *t = textbox_create ( parent_widget, WIDGET_TYPE_TEXTBOX_TEXT, name, TB_AUTOHEIGHT | TB_WRAP, NORMAL, "", 0, 0 );
         box_add ( (box *) parent_widget, WIDGET ( t ), TRUE );
     }
-    else if (  g_ascii_strncasecmp ( name, "button", 6 ) == 0 ) {
+    else if ( g_ascii_strncasecmp ( name, "button", 6 ) == 0 ) {
         textbox *t = textbox_create ( parent_widget, WIDGET_TYPE_EDITBOX, name, TB_AUTOHEIGHT | TB_WRAP, NORMAL, "", 0, 0 );
         box_add ( (box *) parent_widget, WIDGET ( t ), TRUE );
         widget_set_trigger_action_handler ( WIDGET ( t ), textbox_button_trigger_action, state );
     }
-    else if (  g_ascii_strncasecmp ( name, "icon", 4 ) == 0 ) {
+    else if ( g_ascii_strncasecmp ( name, "icon", 4 ) == 0 ) {
         icon *t = icon_create ( parent_widget, name );
+        /* small hack to make it clickable */
+        const char * type = rofi_theme_get_string ( WIDGET(t), "action", NULL );
+        if ( type ) {
+          WIDGET(t)->type = WIDGET_TYPE_EDITBOX;
+        }
         box_add ( (box *) parent_widget, WIDGET ( t ), TRUE );
+        widget_set_trigger_action_handler ( WIDGET ( t ), textbox_button_trigger_action, state );
     }
     else {
         wid = (widget *) box_create ( parent_widget, name, ROFI_ORIENTATION_VERTICAL );
@@ -1193,9 +1297,17 @@ RofiViewState *rofi_view_create ( Mode *sw,
         xcb_map_window ( xcb->connection, CacheState.main_window );
     }
     widget_queue_redraw ( WIDGET ( state->main_window ) );
+    rofi_view_ping_mouse ( state );
     if ( xcb->connection ) {
         xcb_flush ( xcb->connection );
     }
+
+    rofi_view_set_user_timeout ( NULL );
+    /* When Override Redirect, the WM will not let us know we can take focus, so just steal it */
+    if ( ( ( menu_flags & MENU_NORMAL_WINDOW ) == 0 ) ) {
+        display_set_input_focus ( CacheState.main_window );
+    }
+
     if ( xcb->sncontext != NULL ) {
         sn_launchee_context_complete ( xcb->sncontext );
     }
@@ -1226,7 +1338,7 @@ int rofi_view_error_dialog ( const char *msg, int markup )
     // resize window vertically to suit
     state->height = widget_get_desired_height ( WIDGET ( state->main_window ) );
 
-    // Calculte window position.
+    // Calculate window position.
     rofi_view_calculate_window_position ( state );
 
     // Move the window to the correct x,y position.
@@ -1399,6 +1511,11 @@ void rofi_view_window_update_size ( RofiViewState * state )
     proxy->window_update_size ( state );
 }
 
+void rofi_view_set_cursor ( RofiCursorType type )
+{
+    proxy->set_cursor ( type );
+}
+
 void rofi_view_cleanup ( void )
 {
     proxy->cleanup ( );
@@ -1442,6 +1559,11 @@ void rofi_view_set_size ( RofiViewState * state, gint width, gint height )
 void rofi_view_get_size ( RofiViewState * state, gint *width, gint *height )
 {
     proxy->get_size ( state, width, height );
+}
+
+void rofi_view_ping_mouse ( RofiViewState *state )
+{
+    proxy->ping_mouse(state);
 }
 
 void rofi_view_pool_refresh ( void )

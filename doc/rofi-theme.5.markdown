@@ -29,14 +29,14 @@ Comments can be nested and the C comments can be inline.
 
 The following is valid:
 
-```
+```css
 // Magic comment.
 property: /* comment */ value;
 ```
 
 However, this is not:
 
-```
+```css
 prop/*comment*/erty: value;
 ```
 
@@ -46,13 +46,13 @@ White space and newlines, like comments, are ignored by the parser.
 
 This:
 
-```
+```css
 property: name;
 ```
 
 Is identical to:
 
-```
+```css
      property             :
 name
 
@@ -72,7 +72,7 @@ Sub-section names begin with a hash symbol `#`.
 It is advised to define the *global properties section* on top of the file to
 make inheritance of properties clearer.
 
-```
+```css
 /* Global properties section */
 * {
     // list of properties
@@ -112,7 +112,7 @@ Multiple elements can be specified by a `,`.
 
 This is a valid element name:
 
-```
+```css
 element normal.normal {
     background-color: blue;
 }
@@ -123,7 +123,7 @@ button {
 
 And is identical to:
 
-```
+```css
 element normal normal, button {
     background-color: blue;
 }
@@ -133,7 +133,7 @@ Each section inherits the global properties. Properties can be explicitly inheri
 `inherit` keyword.
 In the following example:
 
-```
+```css
 window {
  a: 1;
  b: 2;
@@ -148,7 +148,7 @@ mainbox {
 
 The element `mainbox` will have the following set of properties (if `mainbox` is a child of `window`):
 
-```
+```css
 a: 1;
 b: 4;
 c: 8;
@@ -162,7 +162,7 @@ the last encountered property is used.
 
 The properties in a section consist of:
 
-```
+```css
 {identifier}: {value};
 ```
 
@@ -181,6 +181,7 @@ The current theme format supports different types:
  * a fractional number
  * a boolean value
  * a color
+ * image
  * text style
  * line style
  * a distance
@@ -189,6 +190,7 @@ The current theme format supports different types:
  * a position
  * a reference
  * an orientation
+ * a cursor
  * a list of keywords
  * an environment variable
  * Inherit
@@ -203,7 +205,7 @@ A string is always surrounded by double quotes (`"`). Between the quotes there c
 
 For example:
 
-```
+```css
 font: "Awasome 12";
 ```
 
@@ -217,7 +219,7 @@ An integer may contain any number.
 
 For examples:
 
-```
+```css
 lines: 12;
 ```
 
@@ -229,7 +231,7 @@ A real is an integer with an optional fraction.
 
 For example:
 
-```
+```css
 real: 3.4;
 ```
 
@@ -244,9 +246,24 @@ Boolean value is either `true` or `false`. This is case-sensitive.
 
 For example:
 
-```
+```css
 dynamic: false;
 ```
+
+## Image
+
+**rofi** support a limited set of background-image formats.
+
+* Format: url("path to image");
+* Format: url("path to image", scale);
+  where scale is: none, both, width, height
+* Format: linear-gradient(stop color,stop1, color, stop2 color, ...);
+* Format: linear-gradient(to direction, stop color,stop1, color, stop2 color, ...);
+  where direction is:   top,left,right,bottom.
+* Format: linear-gradient(angle, stop color,stop1, color, stop2 color, ...);
+  Angle in deg,rad,grad (as used in color).
+
+Where the `path` is a string, and `stop` color is of type color.
 
 ## Color
 
@@ -292,14 +309,14 @@ The different values are:
 
 For example:
 
-```
+```css
 background-color: #FF0000;
 border-color: rgba(0,0,1, 0.5);
 text-color: SeaGreen;
 ```
 or
 
-```
+```css
 background-color: transparent;
 text-color: Black;
 ```
@@ -315,9 +332,6 @@ should be applied.
  * `italic`: put the highlighted text in script type (slanted).
  * `underline`: put a line under the highlighted text.
  * `strikethrough`: put a line through the highlighted text.
- * `small caps`: emphasise the text using capitalization.
-
-> For some reason `small caps` does not work on some systems.
 
 ## Line style
 
@@ -348,7 +362,7 @@ Distances used in the horizontal direction use the monitor width. Distances in
 the vertical direction use the monitor height.
 For example:
 
-```
+```css
    padding: 10%;
 ```
 On a full-HD (1920x1080) monitor, it defines a padding of 192 pixels on the left
@@ -358,7 +372,7 @@ and right side and 108 pixels on the top and bottom.
 
 Rofi supports some maths in calculating sizes. For this it uses the CSS syntax:
 
-```
+```css
 width: calc( 100% - 37px );
 ```
 
@@ -440,13 +454,13 @@ A reference can point to another reference. Currently, the maximum number of red
 A property always refers to another property. It cannot be used for a subpart of the property.
 For example, this is not valid:
 
-```
+```css
 highlight: bold @pink;
 ```
 
 But this is:
 
-```
+```css
 * {
     myhigh: bold #FAA;
 }
@@ -462,6 +476,12 @@ window {
 
 Specify the orientation of the widget.
 
+## Cursor
+
+ * Format: `(default|pointer|text)`
+
+Specify the type of mouse cursor that is set when the mouse pointer is over the widget.
+
 ## List of keywords
 
 * Format: `[ keyword, keyword ]`
@@ -476,7 +496,7 @@ The `keyword` in the list refers to an widget name.
 This will parse the environment variable as the property value. (that then can be any of the above types).
 The environment variable should be an alphanumeric string without white-space.
 
-```
+```css
 * {
     background-color: ${BG};
 }
@@ -488,7 +508,7 @@ The environment variable should be an alphanumeric string without white-space.
 
 Inherits the property from its parent widget.
 
-```
+```css
 mainbox {
     border-color: inherit;
 }
@@ -502,7 +522,7 @@ Some widgets have an extra state.
 
 For example:
 
-```
+```css
 element selected {
 }
 ```
@@ -511,7 +531,7 @@ Here `element selected` is the name of the widget, `selected` is the state of th
 
 The difference between dots and spaces is purely cosmetic. These are all the same:
 
-```
+```css
 element .selected {
 
 element.selected {
@@ -585,7 +605,7 @@ These can be mixed.
 
 Example:
 
-```
+```css
 nametotextbox selected.active {
     background-color: #003642;
     text-color: #008ed4;
@@ -618,8 +638,12 @@ The following properties are currently supported:
   Sets a radius on the corners of the borders.
 * **background-color**:      color
   Background color
+* **background-image**:      image
+  Background image
 * **border-color**:      color
   Color of the border
+* **cursor**:      cursor
+  Type of mouse cursor that is set when the mouse pointer is hovered over the widget.
 
 ### window:
 
@@ -666,8 +690,8 @@ The following properties are currently supported:
 * **border-color**:      the color used for the border around the widget.
 * **font**:              the font used by this textbox (string).
 * **str**:               the string to display by this textbox (string).
-* **vertical-align**:    vertical alignment of the text (`0` top, `1` bottom).
-* **horizontal-align**:  horizontal alignment of the text (`0` left, `1` right).
+* **vertical-align**:    Vertical alignment of the text. A number between 0 (top) and 1 (bottom).
+* **horizontal-align**:  Horizontal alignment of the text. A number between 0 (left) and 1 (right).
 * **text-color**:        the text color to use.
 * **highlight**:         text style {color}.
     color is optional, multiple highlight styles can be added like: bold underline italic #000000;
@@ -676,6 +700,7 @@ The following properties are currently supported:
 * **placeholder**:       Set the displayed text (String) when nothing is entered.
 * **placeholder-color**: Color of the placeholder text.
 * **blink**:             Enable/Disable blinking on an input textbox (Boolean).
+* **markup**:            Force markup on, beware that only valid pango markup strings are shown.
 
 ### listview:
 * **columns**:         integer
@@ -746,9 +771,9 @@ The current layout of **rofi** is structured as follows:
 | | mainbox  {BOX:vertical}                                                       |  |
 | | |---------------------------------------------------------------------------| |  |
 | | | inputbar {BOX:horizontal}                                                 | |  |
-| | | |---------| |-----------------------------------------------------| |---| | |  |
-| | | | prompt  | | entry                                               | |ci | | |  |
-| | | |---------| |-----------------------------------------------------| |---| | |  |
+| | | |---------| |-| |---------------------------------|---| |---| |---| |---| | |  |
+| | | | prompt  | |:| | entry                           |#fr| | / | |#ns| |ci | | |  |
+| | | |---------| |_| |---------------------------------|---| |---| |---| |---| | |  |
 | | |---------------------------------------------------------------------------| |  |
 | |                                                                               |  |
 | | |---------------------------------------------------------------------------| |  |
@@ -773,7 +798,9 @@ The current layout of **rofi** is structured as follows:
 
 
 ```
-> ci is the case-indicator
+> * ci is the case-indicator
+> * fr is the num-filtered-rows
+> * ns is the num-rows
 
 ### Error message structure
 
@@ -784,6 +811,9 @@ The current layout of **rofi** is structured as follows:
 | | error-message {BOX:vertical}                                                 |  |
 | | |-------------------------------------------------------------------------|  |  |
 | | | textbox                                                                 |  |  |
+| | | |-----------------| |-------------------------------------------------| |  |  |
+| | | |element-icon     | |element-text                                     | |  |  |
+| | | |-----------------| |-------------------------------------------------| |  |  |
 | | |-------------------------------------------------------------------------|  |  |
 | |------------------------------------------------------------------------------|  |
 |-----------------------------------------------------------------------------------|
@@ -819,23 +849,66 @@ Any widget name starting with `textbox` is a textbox widget, others are box widg
 
 There are several special widgets that can be used by prefixing the name of the widget:
 
-* `textbox`:
-  This is a textbox widget. The displayed string can be set with `str`.
-* `icon`:
-  This is an icon widget. The displayed icon can be set with `filename` and size with `size`.
-* `button`:
- This is a textbox widget that can have a 'clickable' action.
- The `action` can be set to:
- `ok` accept entry.
- `custom` accept custom input.
- `ok|alternate`: accept entry and launch alternate action (for run launch in terminal).
- `custom|alternate`: accept custom input and launch alternate action.
+#### textbox
+
+This is a read-only textbox widget. The displayed string can be set with `content`.
+
+
+Example:
+
+```css
+textbox-custom {
+  expand: false;
+  content: "My Message";
+}
+```
+
+#### Icon
+
+This is an icon widget. The displayed icon can be set with `filename` and size with `size`.
+If the property `action` is set, it acts as a button.
+`action` can be set to a keybinding name and completes that action. (see rofi -show keys for a list).
+
+If the `squared` property is set to **false** the widget height and width are not forced to be equal.
+
+Example:
+
+```css
+icon-paste {
+    expand: false;
+    filename: "gtk-paste";
+    size: 24;
+    vertical-align: 0.5;
+    action: "kb-primary-paste";
+}
+```
+
+
+#### button
+
+This is a textbox widget that can have a 'clickable' action.
+The `action` can be set to:
+`keybinding`: accepts a keybinding name and completes that action. (see rofi -show keys for a list).
+
+```css
+button-paste {
+    expand: false;
+    content: "My Clickable Message";
+    vertical-align: 0.5;
+    action: "kb-primary-paste";
+}
+```
+
+
+#### Children
 
 To specify children, set the `children`
 property (this always happens on the `box` child, see example below):
 
-```
-children: [prompt,entry,overlay,case-indicator];
+```css
+inputbar {
+  children: [prompt,entry,overlay,case-indicator];
+}
 ```
 
 The theme needs to be updated to match the hierarchy specified.
@@ -973,7 +1046,7 @@ G_MESSAGES_DEBUG=Theme rofi -show run
 To test minor changes, part of the theme can be passed on the command line, for example to set it to full-screen:
 
 ```
-rofi -theme-str '#window { fullscreen:true;}' -show run
+rofi -theme-str 'window { fullscreen:true;}' -show run
 ```
 
 To print the current theme, run:
@@ -1011,6 +1084,23 @@ It supports the following keys as constraint:
 }
 ```
 
+
+## Font Parsing
+
+Rofi uses [pango](https://pango.gnome.org/) for font rendering. The font should be specified in a format that pango
+understands.
+This normally is the font name followed by the font size. For example:
+
+```
+mono 18
+```
+
+Or
+
+```
+FontAwesome 22
+```
+
 ## Multiple file handling
 
 The rasi file format offers two methods of including other files.
@@ -1033,7 +1123,7 @@ If a filename is provided, it will try to resolve it in the following order:
  * `${XDG_CONFIG_HOME}/rofi/themes/`
  * `${XDG_CONFIG_HOME}/rofi/`
  * `${XDG_DATA_HOME}/rofi/themes/`
- * `${INSTALL PREFIX}/share/rofi/themes/` 
+ * `${INSTALL PREFIX}/share/rofi/themes/`
 
 A name is resolved as a filename by appending the `.rasi` extension.
 
