@@ -122,4 +122,11 @@ void display_revert_input_focus(void);
 
 guint display_scale(void);
 
+enum clipboard_type {
+  CLIPBOARD_DEFAULT,
+  CLIPBOARD_PRIMARY,
+};
+
+char *display_get_clipboard_data(enum clipboard_type);
+
 #endif

@@ -40,8 +40,9 @@ typedef struct {
   struct wl_registry *registry;
   uint32_t global_names[_WAYLAND_GLOBAL_SIZE];
   struct wl_compositor *compositor;
-  struct zww_launcher_menu_v1 *launcher_menu;
-  struct zww_window_switcher_v1 *window_switcher;
+
+  struct wl_data_device_manager *data_device_manager;
+  struct zwp_primary_selection_device_manager_v1  *primary_selection_device_manager;
 
   struct zwlr_layer_shell_v1 *layer_shell;
 
@@ -67,6 +68,9 @@ typedef struct {
   int32_t scale;
   NkBindingsSeat *bindings_seat;
 
+  char *clipboard_default_data;
+  char *clipboard_primary_data;
+
   uint32_t layer_width;
   uint32_t layer_height;
 } wayland_stuff;
@@ -85,6 +89,10 @@ struct _wayland_seat {
   uint32_t serial;
   struct wl_keyboard *keyboard;
   struct wl_pointer *pointer;
+
+  struct wl_data_device *data_device;
+  struct zwp_primary_selection_device_v1 *primary_selection_device;
+
   widget_button_event button;
   widget_motion_event motion;
   struct {

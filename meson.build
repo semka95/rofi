@@ -1,5 +1,5 @@
 project('rofi', 'c',
-    version: '1.7.0-wayland',
+    version: '1.7.0-wayland-dev',
     meson_version: '>=0.47.0',
     license: [ 'MIT' ],
     default_options: [
@@ -232,6 +232,7 @@ if get_option('wayland').enabled()
     wayland_scanner = find_program('wayland-scanner')
     protocols = files(
         wayland_sys_protocols_dir + '/stable/xdg-shell/xdg-shell.xml',
+        wayland_sys_protocols_dir + '/unstable/primary-selection/primary-selection-unstable-v1.xml',
         'protocols/wlr-layer-shell-unstable-v1.xml',
     )
     proto_srcs = []

@@ -627,6 +627,11 @@ static void rofi_view_trigger_global_action(KeyBindingAction action) {
                             XCB_ATOM_PRIMARY, xcb->ewmh.UTF8_STRING,
                             xcb->ewmh.UTF8_STRING, XCB_CURRENT_TIME);
       xcb_flush(xcb->connection);
+    } else { // config.backend == DISPLAY_WAYLAND
+      char *d = display_get_clipboard_data(CLIPBOARD_PRIMARY);
+      if (d != NULL) {
+        rofi_view_handle_text(current_active_menu, d);
+      }
     }
     break;
   case PASTE_SECONDARY:
@@ -635,6 +640,11 @@ static void rofi_view_trigger_global_action(KeyBindingAction action) {
                             netatoms[CLIPBOARD], xcb->ewmh.UTF8_STRING,
                             xcb->ewmh.UTF8_STRING, XCB_CURRENT_TIME);
       xcb_flush(xcb->connection);
+    } else { // config.backend == DISPLAY_WAYLAND
+      char *d = display_get_clipboard_data(CLIPBOARD_DEFAULT);
+      if (d != NULL) {
+        rofi_view_handle_text(current_active_menu, d);
+      }
     }
     break;
   case SCREENSHOT:

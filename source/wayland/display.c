@@ -55,6 +55,7 @@
 #include "display.h"
 #include "wayland-internal.h"
 
+#include "primary-selection-unstable-v1-protocol.h"
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 
 typedef struct _display_buffer_pool wayland_buffer_pool;
@@ -724,6 +725,129 @@ static void wayland_keyboard_release(wayland_seat *self) {
   self->keyboard = NULL;
 }
 
+static char *clipboard_read_data(int fds[2]) {
+  size_t read_bs = 1024;
+  char *new_clipboard_data = g_malloc(read_bs);
+  if (new_clipboard_data == NULL) {
+    close(fds[0]);
+    return NULL;
+  }
+  size_t k = 0;
+
+  // TODO: do this outside of the wayland loop
+  while (1) {
+    ssize_t n = read(fds[0], new_clipboard_data + k, read_bs);
+    if (n <= 0) {
+      new_clipboard_data[k] = '\0';
+      break;
+    }
+    k += n;
+    new_clipboard_data = g_realloc(new_clipboard_data, k + read_bs);
+    if (new_clipboard_data == NULL) {
+      close(fds[0]);
+      return NULL;
+    }
+  }
+  close(fds[0]);
+
+  return new_clipboard_data;
+}
+
+static void data_offer_handle_offer(void *data, struct wl_data_offer *offer,
+                                    const char *mime_type) {}
+
+static const struct wl_data_offer_listener data_offer_listener = {
+    .offer = data_offer_handle_offer,
+};
+
+static void data_device_handle_data_offer(void *data,
+                                          struct wl_data_device *data_device,
+                                          struct wl_data_offer *offer) {
+  wl_data_offer_add_listener(offer, &data_offer_listener, NULL);
+}
+
+static void data_device_handle_selection(void *data,
+                                         struct wl_data_device *data_device,
+                                         struct wl_data_offer *offer) {
+  if (offer == NULL) {
+    // clipboard is empty
+    return;
+  }
+
+  int fds[2];
+  if (pipe(fds) < 0) {
+    return;
+  }
+  wl_data_offer_receive(offer, "text/plain", fds[1]);
+  close(fds[1]);
+
+  wl_display_roundtrip(wayland->display);
+
+  char *new_clipboard_data = clipboard_read_data(fds);
+
+  if (wayland->clipboard_default_data != NULL) {
+    g_free(wayland->clipboard_default_data);
+  }
+  wayland->clipboard_default_data = new_clipboard_data;
+
+  wl_data_offer_destroy(offer);
+}
+
+static const struct wl_data_device_listener data_device_listener = {
+    .data_offer = data_device_handle_data_offer,
+    .selection = data_device_handle_selection,
+};
+
+static void
+primary_selection_handle_offer(void *data,
+                               struct zwp_primary_selection_offer_v1 *offer,
+                               const char *mime_type) {}
+
+static const struct zwp_primary_selection_offer_v1_listener
+    primary_selection_offer_listener = {
+        .offer = primary_selection_handle_offer,
+};
+
+static void primary_selection_device_handle_data_offer(
+    void *data, struct zwp_primary_selection_device_v1 *data_device,
+    struct zwp_primary_selection_offer_v1 *offer) {
+  zwp_primary_selection_offer_v1_add_listener(
+      offer, &primary_selection_offer_listener, NULL);
+}
+
+static void primary_selection_device_handle_selection(
+    void *data, struct zwp_primary_selection_device_v1 *data_device,
+    struct zwp_primary_selection_offer_v1 *offer) {
+  if (offer == NULL) {
+    // clipboard is empty
+    return;
+  }
+
+  int fds[2];
+  if (pipe(fds) < 0) {
+    return;
+  }
+  zwp_primary_selection_offer_v1_receive(offer, "text/plain", fds[1]);
+  close(fds[1]);
+
+  wl_display_roundtrip(wayland->display);
+
+  char *new_clipboard_data = clipboard_read_data(fds);
+
+  if (wayland->clipboard_primary_data != NULL) {
+    g_free(wayland->clipboard_primary_data);
+  }
+  wayland->clipboard_primary_data = new_clipboard_data;
+
+  zwp_primary_selection_offer_v1_destroy(offer);
+}
+
+static const struct zwp_primary_selection_device_v1_listener
+    primary_selection_device_listener = {
+        .data_offer = primary_selection_device_handle_data_offer,
+        .selection = primary_selection_device_handle_selection,
+};
+
 static void wayland_pointer_release(wayland_seat *self) {
   if (self->pointer == NULL) {
     return;
@@ -773,6 +897,21 @@ static void wayland_seat_capabilities(void *data, struct wl_seat *seat,
   } else if ((!(capabilities & WL_SEAT_CAPABILITY_POINTER)) &&
              (self->pointer != NULL)) {
     wayland_pointer_release(self);
+  }
+
+  if (wayland->data_device_manager != NULL) {
+    self->data_device = wl_data_device_manager_get_data_device(
+        wayland->data_device_manager, seat);
+    wl_data_device_add_listener(self->data_device, &data_device_listener, NULL);
+  }
+
+  if (wayland->primary_selection_device_manager != NULL) {
+    self->primary_selection_device =
+        zwp_primary_selection_device_manager_v1_get_device(
+            wayland->primary_selection_device_manager, seat);
+    zwp_primary_selection_device_v1_add_listener(
+        self->primary_selection_device, &primary_selection_device_listener,
+        NULL);
   }
 }
 
@@ -872,6 +1011,14 @@ static void wayland_registry_handle_global(void *data,
     g_hash_table_insert(wayland->outputs, output->output, output);
 
     wl_output_add_listener(output->output, &wayland_output_listener, output);
+  } else if (strcmp(interface, wl_data_device_manager_interface.name) == 0) {
+    wayland->data_device_manager =
+        wl_registry_bind(registry, name, &wl_data_device_manager_interface, 3);
+  } else if (strcmp(interface,
+                    zwp_primary_selection_device_manager_v1_interface.name) ==
+             0) {
+    wayland->primary_selection_device_manager = wl_registry_bind(
+        registry, name, &zwp_primary_selection_device_manager_v1_interface, 1);
   }
 }
 
@@ -1172,6 +1319,17 @@ static const struct _view_proxy *wayland_display_view_proxy(void) {
 
 static guint wayland_display_scale(void) { return wayland->scale; }
 
+static char *wayland_get_clipboard_data(int type) {
+  switch (type) {
+  case CLIPBOARD_DEFAULT:
+    return wayland->clipboard_default_data;
+  case CLIPBOARD_PRIMARY:
+    return wayland->clipboard_primary_data;
+  }
+
+  return NULL;
+}
+
 static display_proxy display_ = {
     .setup = wayland_display_setup,
     .late_setup = wayland_display_late_setup,
@@ -1183,6 +1341,7 @@ static display_proxy display_ = {
     .set_input_focus = wayland_display_set_input_focus,
     .revert_input_focus = wayland_display_revert_input_focus,
     .scale = wayland_display_scale,
+    .get_clipboard_data = wayland_get_clipboard_data,
 
     .view = wayland_display_view_proxy,
 };
