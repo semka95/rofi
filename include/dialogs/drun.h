@@ -27,13 +27,15 @@
 
 #ifndef ROFI_DIALOG_DRUN_H
 #define ROFI_DIALOG_DRUN_H
+#include "mode.h"
+
+#include "mode.h"
 
 /**
  * @defgroup DRUNMode DRun
  * @ingroup MODES
  * @{
  */
-#include <config.h>
 #ifdef ENABLE_DRUN
 /** #Mode object representing the desktop menu run dialog. */
 extern Mode drun_mode;

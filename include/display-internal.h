@@ -28,28 +28,30 @@
 #ifndef ROFI_DISPLAY_INTERNAL_H
 #define ROFI_DISPLAY_INTERNAL_H
 
-#include <glib.h>
 #include "helper.h"
 #include "nkutils-bindings.h"
+#include <glib.h>
 
 struct _workarea;
 struct _view_proxy;
 
 typedef struct _display_proxy {
-    gboolean (*setup) ( GMainLoop *main_loop, NkBindings *bindings );
-    gboolean (*late_setup) ( void );
-    void (*early_cleanup) ( void );
-    void (*cleanup) ( void );
-    void (*dump_monitor_layout) ( void );
-    void (*startup_notification) ( RofiHelperExecuteContext *context, GSpawnChildSetupFunc *child_setup, gpointer *user_data );
-    int (*monitor_active) ( struct _workarea *mon );
+  gboolean (*setup)(GMainLoop *main_loop, NkBindings *bindings);
+  gboolean (*late_setup)(void);
+  void (*early_cleanup)(void);
+  void (*cleanup)(void);
+  void (*dump_monitor_layout)(void);
+  void (*startup_notification)(RofiHelperExecuteContext *context,
+                               GSpawnChildSetupFunc *child_setup,
+                               gpointer *user_data);
+  int (*monitor_active)(struct _workarea *mon);
 
-    void (*set_input_focus) ( guint window );
-    void (*revert_input_focus) ( void );
+  void (*set_input_focus)(guint window);
+  void (*revert_input_focus)(void);
 
-    guint (*scale) ( void );
+  guint (*scale)(void);
 
-    const struct _view_proxy* (*view) ( void );
+  const struct _view_proxy *(*view)(void);
 } display_proxy;
 
 #endif
