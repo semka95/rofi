@@ -72,7 +72,7 @@ deps += [
 ]
 
 wayland_client = dependency('wayland-client', required: get_option('wayland'))
-wayland_protocols = dependency('wayland-protocols', required: get_option('wayland'))
+wayland_protocols = dependency('wayland-protocols', version: '>= 1.17', required: get_option('wayland'))
 wayland_cursor = dependency('wayland-cursor', required: get_option('wayland'))
 if wayland_client.found()
     deps += wayland_client
