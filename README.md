@@ -77,16 +77,13 @@ The rest of the installation process is unchanged (see [Installation](#Installat
 
 This port to layer shell is not yet in a stable state, so expect to encounter some rough edges. That said, the core of Rofi's functionalities is present.
 
-What is currently missing:
+Notable omissions:
 
-  * [ ] Building with autotools, with or without Wayland support
-  * [ ] Window mode when running in Wayland mode. Though it can be emulated in dmenu mode on some compositors (ie: Sway IPC)
-  * [ ] `-normal-window` flag in Wayland mode
-  * [ ] Selecting which monitor to run rofi on in Wayland mode, only shows up on the currently focused monitor
-  * [ ] Advanced window location options such as x-offset and y-offset (probably not possible with layer shell)
-  * [ ] Some X11-specific options like `-dpi` or fake transparency
-  * [ ] Some refactoring to make the feature less intrusive
-  * [ ] Updated documentation
+  * native window mode when running under Wayland. Recommended solution: https://github.com/lbonn/i3-focus-last#menu-mode
+  * `-normal-window` flag in Wayland mode. Upstream rofi considers it a toy/deprecated feature AFAIK
+  * selecting which monitor to run rofi on in Wayland mode, rofi only shows up on the currently focused monitor
+  * advanced window location options such as x-offset and y-offset. It would probably be quite difficult with layer shell
+  * some X11-specific options like `-dpi` or fake transparency
 
 If you find something does not work and is not listed here, please open a PR.
 

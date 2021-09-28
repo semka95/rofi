@@ -43,6 +43,11 @@ You can also use [Meson](https://mesonbuild.com/) as an alternative.
 On debian based systems, the developer packages are in the form of: `<package>-dev` on rpm based
 `<package>-devel`.
 
+For wayland support:
+
+*   wayland
+*   wayland-protocols >= 1.17
+
 ## Install from a release
 
 ### Autotools
@@ -181,39 +186,16 @@ can then load the core in GDB.
 
 ## Install distribution
 
-### Debian or Ubuntu
+The wayland fork is currently available in some distributions as user contributed packages
 
-    apt install rofi
+### Alpine
 
-### Fedora
-
-    dnf install rofi
+https://pkgs.alpinelinux.org/packages?name=rofi-wayland
 
 ### ArchLinux
 
-    pacman -S rofi
+https://aur.archlinux.org/packages/rofi-lbonn-wayland-git/
 
-### Gentoo
+### Fedora
 
-An ebuild is available, `x11-misc/rofi`. It's up to date, but you may need to
-enable ~arch to get the latest release:
-
-    echo 'x11-misc/rofi ~amd64' >> /etc/portage/package.accept_keywords
-
-for amd64 or:
-
-    echo 'x11-misc/rofi ~x86' >> /etc/portage/package.accept_keywords
-
-for i386.
-
-To install it, simply issue `emerge rofi`.
-
-### openSUSE
-
-On both openSUSE Leap and openSUSE Tumbleweed rofi can be installed using:
-
-    sudo zypper install rofi
-
-### FreeBSD
-
-    sudo pkg install rofi
+https://copr.fedorainfracloud.org/coprs/alebastr/sway-extras/
