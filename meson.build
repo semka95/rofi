@@ -1,13 +1,11 @@
 project('rofi', 'c',
     version: '1.7.0-wayland-dev',
-    meson_version: '>=0.49.0',
+    meson_version: '>=0.47.0',
     license: [ 'MIT' ],
     default_options: [
         'c_std=c99',
     ],
 )
-
-meson.add_dist_script('meson-dist', meson.project_version(), meson.source_root())
 
 c_compiler = meson.get_compiler('c')
 
