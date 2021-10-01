@@ -78,7 +78,7 @@ This port to layer shell is not yet in a stable state, so expect to encounter so
 
 Notable omissions:
 
-  * native window mode when running under Wayland. Recommended solution: https://github.com/lbonn/i3-focus-last#menu-mode
+  * native window mode when running under Wayland. Recommended solution: https://github.com/lbonn/i3-focus-last#menu-mode or https://sr.ht/~tsdh/swayr/
   * `-normal-window` flag in Wayland mode. Upstream rofi considers it a toy/deprecated feature AFAIK
   * selecting which monitor to run rofi on in Wayland mode, rofi only shows up on the currently focused monitor
   * advanced window location options such as x-offset and y-offset. It would probably be quite difficult with layer shell
