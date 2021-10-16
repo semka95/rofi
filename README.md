@@ -81,7 +81,7 @@ Notable omissions:
   * native window mode when running under Wayland. Recommended solution: https://github.com/lbonn/i3-focus-last#menu-mode or https://sr.ht/~tsdh/swayr/
   * `-normal-window` flag in Wayland mode. Upstream rofi considers it a toy/deprecated feature AFAIK
   * selecting which monitor to run rofi on in Wayland mode, rofi only shows up on the currently focused monitor
-  * advanced window location options such as x-offset and y-offset. It would probably be quite difficult with layer shell
+  * some window locations parameters work partially, `x-offset` and `y-offset` are only working from screen edges
   * some X11-specific options like `-dpi` or fake transparency
 
 If you find something does not work and is not listed here, please open a PR.
