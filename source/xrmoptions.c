@@ -549,7 +549,8 @@ void config_parse_cmd_options(void) {
             g_string_append(str, " } ");
           }
           if (rofi_theme_parse_string(str->str) == 1) {
-            printf("failed\n");
+            /** Failed to parse, try again as string. */
+            rofi_clear_error_messages();
           }
         }
         g_string_free(str, TRUE);
@@ -639,6 +640,22 @@ static gboolean __config_parser_set_property(XrmOption *option,
 }
 
 gboolean config_parse_set_property(const Property *p, char **error) {
+  if (g_ascii_strcasecmp(p->name, "theme") == 0) {
+    if (p->type == P_STRING) {
+      *error = g_strdup_printf("The option:\n<b>\nconfiguration\n{\n\ttheme: "
+                               "\"%s\";\n}</b>\nis deprecated. Please replace "
+                               "with: <b>@theme \"%s\"</b> "
+                               "after the configuration block.",
+                               p->value.s, p->value.s);
+    } else {
+      *error = g_strdup_printf("The option:\n<b>\nconfiguration\n{\n\ttheme: "
+                               "\"%s\";\n}</b>\nis deprecated. Please replace "
+                               "with: <b>@theme \"%s\"</b> "
+                               "after the configuration block.",
+                               "myTheme", "myTheme");
+    }
+    return TRUE;
+  }
   for (unsigned int i = 0; i < sizeof(xrmOptions) / sizeof(XrmOption); ++i) {
     XrmOption *op = &(xrmOptions[i]);
     if (g_strcmp0(op->name, p->name) == 0) {
@@ -651,21 +668,23 @@ gboolean config_parse_set_property(const Property *p, char **error) {
       return __config_parser_set_property(op, p, error);
     }
   }
-  *error = g_strdup_printf("Option: %s is not found.", p->name);
+  //*error = g_strdup_printf("Option: %s is not found.", p->name);
+  g_warning("Option: %s is not found.", p->name);
+
 
   for (GList *iter = g_list_first(extra_parsed_options); iter != NULL;
        iter = g_list_next(iter)) {
     if (g_strcmp0(((Property *)(iter->data))->name, p->name) == 0) {
       rofi_theme_property_free((Property *)(iter->data));
       iter->data = (void *)rofi_theme_property_copy(p);
-      return TRUE;
+      return FALSE;
     }
   }
   g_debug("Adding option: %s to backup list.", p->name);
   extra_parsed_options =
       g_list_append(extra_parsed_options, rofi_theme_property_copy(p));
 
-  return TRUE;
+  return FALSE;
 }
 
 void config_xresource_free(void) {

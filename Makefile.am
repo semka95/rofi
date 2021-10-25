@@ -186,23 +186,6 @@ EXTRA_DIST += \
 	doc/rofi-sensible-terminal.1.markdown \
 	doc/rofi.1.markdown
 
-##
-# Readme.md
-##
-markdown_SC_FILES=\
-	README.md
-
-# want the html to show up in release.
-md_verbose = $(md_verbose_@AM_V@)
-md_verbose_ = $(md_verbose_@AM_DEFAULT_V@)
-md_verbose_0 = @echo "  MD" $@;
-
-markdown_FILES=\
-	README.html
-
-README.html: README.md
-	$(md_verbose) markdown $< > $@
-
 ###
 # Themes
 ###
@@ -245,7 +228,6 @@ theme_DATA=\
 ##
 EXTRA_DIST+=\
 	$(markdown_FILES)\
-	$(markdown_SC_FILES)\
 	Examples/i3_switch_workspaces.sh\
 	Examples/i3_empty_workspace.sh\
 	Examples/test_script_mode.sh\
@@ -348,6 +330,7 @@ helper_pidfile_SOURCES=\
 					   include/mode-private.h\
 					   source/helper.c\
 					   source/theme.c\
+						 source/css-colors.c\
 					   source/rofi-types.c\
 					   include/rofi-types.h\
 					   include/helper.h\
@@ -468,6 +451,7 @@ helper_test_SOURCES=\
 	include/xrmoptions.h\
 	source/xrmoptions.c\
 	source/theme.c\
+	source/css-colors.c\
 	source/rofi-types.c\
 	include/rofi-types.h\
 	test/helper-test.c
@@ -505,6 +489,7 @@ helper_expand_SOURCES=\
 	include/mode-private.h\
 	source/helper.c\
 	source/theme.c\
+	source/css-colors.c\
 	include/helper.h\
 	include/helper-theme.h\
 	include/xrmoptions.h\
@@ -527,6 +512,7 @@ helper_config_cmdline_parser_SOURCES=\
 	include/mode-private.h\
 	source/helper.c\
 	source/theme.c\
+	source/css-colors.c\
 	source/rofi-types.c\
 	include/rofi-types.h\
 	include/helper.h\
@@ -544,7 +530,8 @@ mode_test_SOURCES=\
 				  source/dialogs/help-keys.c\
 				  source/helper.c\
 				  source/theme.c\
-				  source/mode.c\
+					source/css-colors.c\
+					source/mode.c\
 				  source/rofi-types.c\
 				  include/rofi-types.h\
 				  source/xrmoptions.c\
@@ -560,6 +547,7 @@ helper_tokenize_SOURCES=\
 					   include/mode-private.h\
 					   source/helper.c\
 					   source/theme.c\
+						 source/css-colors.c\
 					   source/rofi-types.c\
 					   include/rofi-types.h\
 					   include/helper.h\
@@ -630,8 +618,26 @@ coverage-clean:
 
 EXTRA_DIST += \
 	doc/meson.build \
+	subprojects/libgwater/mpd/meson.build \
+	subprojects/libgwater/nl/meson.build \
+	subprojects/libgwater/wayland/meson.build \
+	subprojects/libgwater/xcb/meson.build \
+	subprojects/libgwater/alsa-mixer/meson.build \
+	subprojects/libgwater/wayland-server/meson.build \
+	subprojects/libgwater/meson.build \
+	subprojects/libgwater/win/meson.build \
 	subprojects/libnkutils/meson.build \
 	subprojects/libnkutils/meson_options.txt \
-	subprojects/libgwater/xcb/meson.build \
+	subprojects/libgwater/wayland/libgwater-wayland.h \
+	subprojects/libgwater/wayland/libgwater-wayland.c \
+	subprojects/libgwater/wayland-server/libgwater-wayland-server.c \
+	subprojects/libgwater/wayland-server/libgwater-wayland-server.h \
+	subprojects/libgwater/mpd/libgwater-mpd.h \
+	subprojects/libgwater/mpd/libgwater-mpd.c \
+	subprojects/libgwater/nl/libgwater-nl.h \
+	subprojects/libgwater/nl/libgwater-nl.c \
+	subprojects/libgwater/alsa-mixer/libgwater-alsa-mixer.h \
+	subprojects/libgwater/alsa-mixer/libgwater-alsa-mixer.c \
+	doc/meson_build_manpages.sh \
 	meson_options.txt \
 	meson.build

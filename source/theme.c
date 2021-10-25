@@ -187,6 +187,9 @@ void rofi_theme_property_free(Property *p) {
   g_free(p->name);
   if (p->type == P_STRING) {
     g_free(p->value.s);
+  } else if (p->type == P_LIST) {
+    g_list_free_full(p->value.list, g_free);
+    p->value.list = 0;
   } else if (p->type == P_LINK) {
     g_free(p->value.link.name);
     if (p->value.link.def_value) {
@@ -291,6 +294,27 @@ static void rofi_theme_print_distance_unit(RofiDistanceUnit *unit) {
   }
 }
 
+static void rofi_theme_print_color(ThemeColor color) {
+  uint8_t r, g, b;
+  g = 255 * color.green;
+  r = 255 * color.red;
+  b = 255 * color.blue;
+  if (color.alpha < 0.00001) {
+    printf("transparent");
+    return;
+  }
+  for (uint32_t x = 0; x < num_CSSColors; x++) {
+    if (CSSColors[x].r == r && CSSColors[x].g == g && CSSColors[x].b == b) {
+      printf("%s", CSSColors[x].name);
+      if (color.alpha < 1) {
+        printf("/%.0f%%", color.alpha * 100.0);
+      }
+      return;
+    }
+  }
+  printf("rgba ( %.0f, %.0f, %.0f, %.0f %% )", (color.red * 255.0),
+         (color.green * 255.0), (color.blue * 255.0), (color.alpha * 100.0));
+}
 static void rofi_theme_print_distance(RofiDistance d) {
   if (d.base.modtype == ROFI_DISTANCE_MODIFIER_GROUP) {
     fputs("calc( ", stdout);
@@ -343,11 +367,7 @@ static void int_rofi_theme_print_property(Property *p) {
       printf("italic ");
     }
     if (p->value.highlight.style & ROFI_HL_COLOR) {
-      printf("rgba ( %.0f, %.0f, %.0f, %.0f %% )",
-             (p->value.highlight.color.red * 255.0),
-             (p->value.highlight.color.green * 255.0),
-             (p->value.highlight.color.blue * 255.0),
-             (p->value.highlight.color.alpha * 100.0));
+      rofi_theme_print_color(p->value.highlight.color);
     }
     break;
   case P_POSITION: {
@@ -399,9 +419,7 @@ static void int_rofi_theme_print_property(Property *p) {
     printf("%s", p->value.b ? "true" : "false");
     break;
   case P_COLOR:
-    printf("rgba ( %.0f, %.0f, %.0f, %.0f %% )", (p->value.color.red * 255.0),
-           (p->value.color.green * 255.0), (p->value.color.blue * 255.0),
-           (p->value.color.alpha * 100.0));
+    rofi_theme_print_color(p->value.color);
     break;
   case P_IMAGE: {
     if (p->value.image.type == ROFI_IMAGE_URL) {
@@ -413,9 +431,7 @@ static void int_rofi_theme_print_property(Property *p) {
       for (GList *l = g_list_first(p->value.image.colors); l != NULL;
            l = g_list_next(l)) {
         ThemeColor *color = (ThemeColor *)l->data;
-        printf("rgba ( %.0f, %.0f, %.0f, %.0f %% )", (color->red * 255.0),
-               (color->green * 255.0), (color->blue * 255.0),
-               (color->alpha * 100.0));
+        rofi_theme_print_color(*color);
         index++;
         if (index < length) {
           printf(", ");
@@ -756,7 +772,8 @@ static int rofi_theme_get_position_inside(Property *p, const widget *widget,
             rofi_theme_find_widget(widget->parent->name, widget->state, FALSE);
         Property *pv =
             rofi_theme_find_property(parent, P_POSITION, property, FALSE);
-        return rofi_theme_get_position_inside(pv, widget->parent, property, def);
+        return rofi_theme_get_position_inside(pv, widget->parent, property,
+                                              def);
       }
       return def;
     }
@@ -795,7 +812,7 @@ int rofi_theme_get_integer(const widget *widget, const char *property,
                            int def) {
   ThemeWidget *wid = rofi_theme_find_widget(widget->name, widget->state, FALSE);
   Property *p = rofi_theme_find_property(wid, P_INTEGER, property, FALSE);
-  return rofi_theme_get_integer_inside(p, widget, property, def);
+  return (int)rofi_theme_get_integer_inside(p, widget, property, (double)def);
 }
 static RofiDistance rofi_theme_get_distance_inside(Property *p,
                                                    const widget *widget,
@@ -872,7 +889,8 @@ static RofiOrientation rofi_theme_get_orientation_inside(Property *p,
             rofi_theme_find_widget(widget->parent->name, widget->state, FALSE);
         Property *pv =
             rofi_theme_find_property(parent, P_ORIENTATION, property, FALSE);
-        return rofi_theme_get_orientation_inside(pv, widget->parent, property, def);
+        return rofi_theme_get_orientation_inside(pv, widget->parent, property,
+                                                 def);
       }
       return def;
     }
@@ -901,7 +919,8 @@ static RofiCursorType rofi_theme_get_cursor_type_inside(Property *p,
             rofi_theme_find_widget(widget->parent->name, widget->state, FALSE);
         Property *pv =
             rofi_theme_find_property(parent, P_CURSOR, property, FALSE);
-        return rofi_theme_get_cursor_type_inside(pv, widget->parent, property, def);
+        return rofi_theme_get_cursor_type_inside(pv, widget->parent, property,
+                                                 def);
       }
       return def;
     }
@@ -945,6 +964,29 @@ const char *rofi_theme_get_string(const widget *widget, const char *property,
   Property *p = rofi_theme_find_property(wid, P_STRING, property, FALSE);
   return rofi_theme_get_string_inside(p, widget, property, def);
 }
+
+static double rofi_theme_get_double_integer_fb_inside(Property *p,
+                                                      const widget *widget,
+                                                      const char *property,
+                                                      double def) {
+  if (p) {
+    if (p->type == P_INHERIT) {
+      if (widget->parent) {
+        ThemeWidget *parent =
+            rofi_theme_find_widget(widget->parent->name, widget->state, FALSE);
+        Property *pv =
+            rofi_theme_find_property(parent, P_INTEGER, property, FALSE);
+        return rofi_theme_get_double_integer_fb_inside(pv, widget->parent,
+                                                       property, def);
+      }
+      return def;
+    }
+    return p->value.i;
+  }
+  g_debug("Theme entry: #%s %s property %s unset.", widget->name,
+          widget->state ? widget->state : "", property);
+  return def;
+}
 static double rofi_theme_get_double_inside(const widget *orig, Property *p,
                                            const widget *widget,
                                            const char *property, double def) {
@@ -961,11 +1003,10 @@ static double rofi_theme_get_double_inside(const widget *orig, Property *p,
     }
     return p->value.f;
   }
-  ThemeWidget *wid =
-	  rofi_theme_find_widget(orig->name, widget->state, FALSE);
+  ThemeWidget *wid = rofi_theme_find_widget(orig->name, widget->state, FALSE);
   // Fallback to integer if double is not found.
   p = rofi_theme_find_property(wid, P_INTEGER, property, FALSE);
-  return rofi_theme_get_integer_inside(p, widget, property, def);
+  return rofi_theme_get_double_integer_fb_inside(p, widget, property, def);
 }
 double rofi_theme_get_double(const widget *widget, const char *property,
                              double def) {
@@ -1157,7 +1198,8 @@ static GList *rofi_theme_get_list_inside(Property *p, const widget *widget,
             rofi_theme_find_widget(widget->parent->name, widget->state, FALSE);
         Property *pv =
             rofi_theme_find_property(parent, P_LIST, property, FALSE);
-        return rofi_theme_get_list_inside(pv, widget->parent, property, defaults);
+        return rofi_theme_get_list_inside(pv, widget->parent, property,
+                                          defaults);
       }
     } else if (p->type == P_LIST) {
       return g_list_copy_deep(p->value.list, rofi_g_list_strdup, NULL);
@@ -1321,22 +1363,6 @@ char *rofi_theme_parse_prepare_file(const char *file, const char *parent_file) {
   return filename;
 }
 
-static void rofi_theme_parse_merge_widgets_no_media(ThemeWidget *parent,
-                                                    ThemeWidget *child) {
-  g_assert(parent != NULL);
-  g_assert(child != NULL);
-
-  if (parent == rofi_theme && g_strcmp0(child->name, "*") == 0) {
-    rofi_theme_widget_add_properties(parent, child->properties);
-    return;
-  }
-
-  ThemeWidget *w = rofi_theme_find_or_create_name(parent, child->name);
-  rofi_theme_widget_add_properties(w, child->properties);
-  for (unsigned int i = 0; i < child->num_widgets; i++) {
-    rofi_theme_parse_merge_widgets_no_media(w, child->widgets[i]);
-  }
-}
 void rofi_theme_parse_merge_widgets(ThemeWidget *parent, ThemeWidget *child) {
   g_assert(parent != NULL);
   g_assert(child != NULL);
@@ -1362,17 +1388,22 @@ static void rofi_theme_parse_process_conditionals_int(workarea mon,
   if (rwidget == NULL) {
     return;
   }
-  for (unsigned int i = 0; i < rwidget->num_widgets; i++) {
+  unsigned int i = 0;
+  //  for (unsigned int i = 0; i < rwidget->num_widgets; i++) {
+  while (i < rwidget->num_widgets) {
     ThemeWidget *widget = rwidget->widgets[i];
-    rofi_theme_parse_process_conditionals_int(mon, widget);
     if (widget->media != NULL) {
+      rwidget->num_widgets--;
+      for (unsigned x = i; x < rwidget->num_widgets; x++) {
+        rwidget->widgets[x] = rwidget->widgets[x + 1];
+      }
+      rwidget->widgets[rwidget->num_widgets] = NULL;
       switch (widget->media->type) {
       case THEME_MEDIA_TYPE_MIN_WIDTH: {
         int w = widget->media->value;
         if (mon.w >= w) {
           for (unsigned int x = 0; x < widget->num_widgets; x++) {
-            rofi_theme_parse_merge_widgets_no_media(rofi_theme,
-                                                    widget->widgets[x]);
+            rofi_theme_parse_merge_widgets(rwidget, widget->widgets[x]);
           }
         }
         break;
@@ -1381,8 +1412,7 @@ static void rofi_theme_parse_process_conditionals_int(workarea mon,
         int w = widget->media->value;
         if (mon.w < w) {
           for (unsigned int x = 0; x < widget->num_widgets; x++) {
-            rofi_theme_parse_merge_widgets_no_media(rofi_theme,
-                                                    widget->widgets[x]);
+            rofi_theme_parse_merge_widgets(rwidget, widget->widgets[x]);
           }
         }
         break;
@@ -1391,9 +1421,9 @@ static void rofi_theme_parse_process_conditionals_int(workarea mon,
         int h = widget->media->value;
         if (mon.h >= h) {
           for (unsigned int x = 0; x < widget->num_widgets; x++) {
-            rofi_theme_parse_merge_widgets_no_media(rofi_theme,
-                                                    widget->widgets[x]);
+            rofi_theme_parse_merge_widgets(rwidget, widget->widgets[x]);
           }
+        } else {
         }
         break;
       }
@@ -1401,8 +1431,7 @@ static void rofi_theme_parse_process_conditionals_int(workarea mon,
         int h = widget->media->value;
         if (mon.h < h) {
           for (unsigned int x = 0; x < widget->num_widgets; x++) {
-            rofi_theme_parse_merge_widgets_no_media(rofi_theme,
-                                                    widget->widgets[x]);
+            rofi_theme_parse_merge_widgets(rwidget, widget->widgets[x]);
           }
         }
         break;
@@ -1410,8 +1439,7 @@ static void rofi_theme_parse_process_conditionals_int(workarea mon,
       case THEME_MEDIA_TYPE_MON_ID: {
         if (mon.monitor_id == widget->media->value) {
           for (unsigned int x = 0; x < widget->num_widgets; x++) {
-            rofi_theme_parse_merge_widgets_no_media(rofi_theme,
-                                                    widget->widgets[x]);
+            rofi_theme_parse_merge_widgets(rwidget, widget->widgets[x]);
           }
         }
         break;
@@ -1420,8 +1448,7 @@ static void rofi_theme_parse_process_conditionals_int(workarea mon,
         double r = widget->media->value;
         if ((mon.w / (double)mon.h) >= r) {
           for (unsigned int x = 0; x < widget->num_widgets; x++) {
-            rofi_theme_parse_merge_widgets_no_media(rofi_theme,
-                                                    widget->widgets[x]);
+            rofi_theme_parse_merge_widgets(rwidget, widget->widgets[x]);
           }
         }
         break;
@@ -1430,8 +1457,7 @@ static void rofi_theme_parse_process_conditionals_int(workarea mon,
         double r = widget->media->value;
         if ((mon.w / (double)mon.h) < r) {
           for (unsigned int x = 0; x < widget->num_widgets; x++) {
-            rofi_theme_parse_merge_widgets_no_media(rofi_theme,
-                                                    widget->widgets[x]);
+            rofi_theme_parse_merge_widgets(rwidget, widget->widgets[x]);
           }
         }
         break;
@@ -1440,6 +1466,11 @@ static void rofi_theme_parse_process_conditionals_int(workarea mon,
         break;
       }
       }
+      rofi_theme_free(widget);
+      // endif
+    } else {
+      rofi_theme_parse_process_conditionals_int(mon, widget);
+      i++;
     }
   }
 }

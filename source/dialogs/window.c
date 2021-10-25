@@ -147,7 +147,7 @@ typedef struct {
   unsigned int title_len;
   unsigned int role_len;
   GRegex *window_regex;
-} ModeModePrivateData;
+} WindowModePrivateData;
 
 winlist *cache_client = NULL;
 
@@ -236,6 +236,9 @@ static void winlist_free(winlist *l) {
  * @returns -1 if failed, index is successful.
  */
 static int winlist_find(winlist *l, xcb_window_t w) {
+  if (l == NULL) {
+    return -1;
+  }
   // iterate backwards. Theory is: windows most often accessed will be
   // nearer the end. Testing with kcachegrind seems to support this...
   int i;
@@ -305,7 +308,7 @@ static int client_has_window_type(client *c, xcb_atom_t type) {
   return 0;
 }
 
-static client *window_client(ModeModePrivateData *pd, xcb_window_t win) {
+static client *window_client(WindowModePrivateData *pd, xcb_window_t win) {
   if (win == XCB_WINDOW_NONE) {
     return NULL;
   }
@@ -378,9 +381,35 @@ static client *window_client(ModeModePrivateData *pd, xcb_window_t win) {
   g_free(attr);
   return c;
 }
+
+guint window_reload_timeout = 0;
+static gboolean window_client_reload(G_GNUC_UNUSED void *data) {
+  window_reload_timeout = 0;
+  if (window_mode.private_data) {
+    window_mode._destroy(&window_mode);
+    window_mode._init(&window_mode);
+  }
+  if (window_mode_cd.private_data) {
+    window_mode._destroy(&window_mode_cd);
+    window_mode._init(&window_mode_cd);
+  }
+  if (window_mode.private_data || window_mode_cd.private_data) {
+    rofi_view_reload();
+  }
+  return G_SOURCE_REMOVE;
+}
+void window_client_handle_signal(xcb_window_t win, gboolean create) {
+  //  g_idle_add_full(G_PRIORITY_HIGH_IDLE, window_client_reload, NULL, NULL);
+  if (window_reload_timeout > 0) {
+    g_source_remove(window_reload_timeout);
+    window_reload_timeout = 0;
+  }
+  window_reload_timeout = g_timeout_add(100, window_client_reload, NULL);
+}
 static int window_match(const Mode *sw, rofi_int_matcher **tokens,
                         unsigned int index) {
-  ModeModePrivateData *rmpd = (ModeModePrivateData *)mode_get_private_data(sw);
+  WindowModePrivateData *rmpd =
+      (WindowModePrivateData *)mode_get_private_data(sw);
   int match = 1;
   const winlist *ids = (winlist *)rmpd->ids;
   // Want to pull directly out of cache, X calls are not thread safe.
@@ -466,8 +495,8 @@ static void window_mode_parse_fields() {
 }
 
 static unsigned int window_mode_get_num_entries(const Mode *sw) {
-  const ModeModePrivateData *pd =
-      (const ModeModePrivateData *)mode_get_private_data(sw);
+  const WindowModePrivateData *pd =
+      (const WindowModePrivateData *)mode_get_private_data(sw);
 
   return pd->ids ? pd->ids->len : 0;
 }
@@ -492,7 +521,8 @@ static const char *_window_name_list_entry(const char *str, uint32_t length,
   return &str[offset];
 }
 static void _window_mode_load_data(Mode *sw, unsigned int cd) {
-  ModeModePrivateData *pd = (ModeModePrivateData *)mode_get_private_data(sw);
+  WindowModePrivateData *pd =
+      (WindowModePrivateData *)mode_get_private_data(sw);
   // find window list
   xcb_window_t curr_win_id;
   int found = 0;
@@ -603,27 +633,31 @@ static void _window_mode_load_data(Mode *sw, unsigned int cd) {
                 g_free(output);
               } else {
                 winclient->wmdesktopstr = g_strdup("Invalid name");
-                pd->wmdn_len = MAX(pd->wmdn_len,
-                                   g_utf8_strlen(winclient->wmdesktopstr, -1));
+                winclient->wmdesktopstr_len =
+                    g_utf8_strlen(winclient->wmdesktopstr, -1);
+                pd->wmdn_len = MAX(pd->wmdn_len, winclient->wmdesktopstr_len);
               }
             } else {
               winclient->wmdesktopstr = g_markup_escape_text(
                   _window_name_list_entry(names.strings, names.strings_len,
                                           winclient->wmdesktop),
                   -1);
-              pd->wmdn_len =
-                  MAX(pd->wmdn_len, g_utf8_strlen(winclient->wmdesktopstr, -1));
+              winclient->wmdesktopstr_len =
+                  g_utf8_strlen(winclient->wmdesktopstr, -1);
+              pd->wmdn_len = MAX(pd->wmdn_len, winclient->wmdesktopstr_len);
             }
           } else {
             winclient->wmdesktopstr =
                 g_strdup_printf("%u", (uint32_t)winclient->wmdesktop);
-            pd->wmdn_len =
-                MAX(pd->wmdn_len, g_utf8_strlen(winclient->wmdesktopstr, -1));
+            winclient->wmdesktopstr_len =
+                g_utf8_strlen(winclient->wmdesktopstr, -1);
+            pd->wmdn_len = MAX(pd->wmdn_len, winclient->wmdesktopstr_len);
           }
         } else {
           winclient->wmdesktopstr = g_strdup("");
-          pd->wmdn_len =
-              MAX(pd->wmdn_len, g_utf8_strlen(winclient->wmdesktopstr, -1));
+          winclient->wmdesktopstr_len =
+              g_utf8_strlen(winclient->wmdesktopstr, -1);
+          pd->wmdn_len = MAX(pd->wmdn_len, winclient->wmdesktopstr_len);
         }
         if (cd && winclient->wmdesktop != current_desktop) {
           continue;
@@ -640,7 +674,7 @@ static void _window_mode_load_data(Mode *sw, unsigned int cd) {
 }
 static int window_mode_init(Mode *sw) {
   if (mode_get_private_data(sw) == NULL) {
-    ModeModePrivateData *pd = g_malloc0(sizeof(*pd));
+    WindowModePrivateData *pd = g_malloc0(sizeof(*pd));
     pd->window_regex = g_regex_new("{[-\\w]+(:-?[0-9]+)?}", 0, 0, NULL);
     mode_set_private_data(sw, (void *)pd);
     _window_mode_load_data(sw, FALSE);
@@ -652,7 +686,7 @@ static int window_mode_init(Mode *sw) {
 }
 static int window_mode_init_cd(Mode *sw) {
   if (mode_get_private_data(sw) == NULL) {
-    ModeModePrivateData *pd = g_malloc0(sizeof(*pd));
+    WindowModePrivateData *pd = g_malloc0(sizeof(*pd));
     pd->window_regex = g_regex_new("{[-\\w]+(:-?[0-9]+)?}", 0, 0, NULL);
     mode_set_private_data(sw, (void *)pd);
     _window_mode_load_data(sw, TRUE);
@@ -696,7 +730,8 @@ static inline int act_on_window(xcb_window_t window) {
 static ModeMode window_mode_result(Mode *sw, int mretv,
                                    G_GNUC_UNUSED char **input,
                                    unsigned int selected_line) {
-  ModeModePrivateData *rmpd = (ModeModePrivateData *)mode_get_private_data(sw);
+  WindowModePrivateData *rmpd =
+      (WindowModePrivateData *)mode_get_private_data(sw);
   ModeMode retv = MODE_EXIT;
   if ((mretv & (MENU_OK))) {
     if (mretv & MENU_CUSTOM_ACTION) {
@@ -754,18 +789,8 @@ static ModeMode window_mode_result(Mode *sw, int mretv,
     Property *p =
         rofi_theme_find_property(wid, P_BOOLEAN, "close-on-delete", TRUE);
     if (p && p->type == P_BOOLEAN && p->value.b == FALSE) {
-      // Force a reload.
-      client_free(rmpd->ids->data[selected_line]);
-      g_free(rmpd->ids->data[selected_line]);
-      memmove(&(rmpd->ids->array[selected_line]),
-              &(rmpd->ids->array[selected_line + 1]),
-              rmpd->ids->len - selected_line);
-      memmove(&(rmpd->ids->data[selected_line]),
-              &(rmpd->ids->data[selected_line + 1]),
-              rmpd->ids->len - selected_line);
-      rmpd->ids->len--;
 
-      retv = RELOAD_DIALOG;
+      return RELOAD_DIALOG;
     }
   } else if ((mretv & MENU_CUSTOM_INPUT) && *input != NULL &&
              *input[0] != '\0') {
@@ -793,7 +818,8 @@ static ModeMode window_mode_result(Mode *sw, int mretv,
 }
 
 static void window_mode_destroy(Mode *sw) {
-  ModeModePrivateData *rmpd = (ModeModePrivateData *)mode_get_private_data(sw);
+  WindowModePrivateData *rmpd =
+      (WindowModePrivateData *)mode_get_private_data(sw);
   if (rmpd != NULL) {
     winlist_free(rmpd->ids);
     x11_cache_free();
@@ -804,7 +830,7 @@ static void window_mode_destroy(Mode *sw) {
   }
 }
 struct arg {
-  const ModeModePrivateData *pd;
+  const WindowModePrivateData *pd;
   client *c;
 };
 
@@ -869,7 +895,7 @@ static gboolean helper_eval_cb(const GMatchInfo *info, GString *str,
   }
   return FALSE;
 }
-static char *_generate_display_string(const ModeModePrivateData *pd,
+static char *_generate_display_string(const WindowModePrivateData *pd,
                                       client *c) {
   struct arg d = {pd, c};
   char *res = g_regex_replace_eval(pd->window_regex, config.window_format, -1,
@@ -880,10 +906,10 @@ static char *_generate_display_string(const ModeModePrivateData *pd,
 static char *_get_display_value(const Mode *sw, unsigned int selected_line,
                                 int *state, G_GNUC_UNUSED GList **list,
                                 int get_entry) {
-  ModeModePrivateData *rmpd = mode_get_private_data(sw);
+  WindowModePrivateData *rmpd = mode_get_private_data(sw);
   client *c = window_client(rmpd, rmpd->ids->array[selected_line]);
   if (c == NULL) {
-    return get_entry ? g_strdup("Window has fanished") : NULL;
+    return get_entry ? g_strdup("Window has vanished") : NULL;
   }
   if (c->demands) {
     *state |= URGENT;
@@ -997,8 +1023,11 @@ static cairo_surface_t *get_net_wm_icon(xcb_window_t xid,
 }
 static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
                                   int size) {
-  ModeModePrivateData *rmpd = mode_get_private_data(sw);
+  WindowModePrivateData *rmpd = mode_get_private_data(sw);
   client *c = window_client(rmpd, rmpd->ids->array[selected_line]);
+  if (c == NULL) {
+    return NULL;
+  }
   if (config.window_thumbnail && c->thumbnail_checked == FALSE) {
     c->icon = x11_helper_get_screenshot_surface_window(c->window, size);
     c->thumbnail_checked = TRUE;
@@ -1011,7 +1040,9 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
     if (c->icon_fetch_uid > 0) {
       return rofi_icon_fetcher_get(c->icon_fetch_uid);
     }
-    c->icon_fetch_uid = rofi_icon_fetcher_query(c->class, size);
+    char *class_lower = g_utf8_strdown(c->class, -1);
+    c->icon_fetch_uid = rofi_icon_fetcher_query(class_lower, size);
+    g_free(class_lower);
     return rofi_icon_fetcher_get(c->icon_fetch_uid);
   }
   return c->icon;

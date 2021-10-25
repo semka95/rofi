@@ -35,6 +35,7 @@
 #include "theme.h"
 #include "xrmoptions.h"
 #include "css-colors.h"
+#include "rofi.h"
 
 typedef struct YYLTYPE {
   int first_line;
@@ -265,6 +266,10 @@ static ThemeColor hwb_to_rgb ( double h, double w, double b )
 %token T_MEDIA_MAX                      "Max"
 %token T_MEDIA_SEP                      "-"
 
+
+%token T_VAR_START                      "var" 
+%token T_ENV_START                      "env" 
+
 %type <theme>          t_entry_list
 %type <theme>          t_entry_list_included
 %type <list>           t_entry_name_path
@@ -318,6 +323,7 @@ t_main
         ThemeWidget *d = $2->widgets[i];
         rofi_theme_parse_merge_widgets(rofi_theme, d);
     }
+    rofi_theme_free ( $2 );
 }
 ;
 
@@ -372,7 +378,8 @@ t_entry_list:
     g_list_free ( $3 );
 }
 | t_entry_list T_PDEFAULTS T_BOPEN t_property_list_optional T_BCLOSE {
-    rofi_theme_widget_add_properties ( $1, $4);
+    ThemeWidget *widget = rofi_theme_find_or_create_name ( $1, "*" );
+    rofi_theme_widget_add_properties (widget, $4);
     if ( $4 ) {
         g_hash_table_destroy ( $4 );
     }
@@ -388,6 +395,7 @@ t_entry_list:
         ThemeWidget *d = $9->widgets[i];
         rofi_theme_parse_merge_widgets(widget, d);
     }
+    g_free ( $4 );
     g_free ( name );
 }
 | t_entry_list T_MEDIA T_PARENT_LEFT T_STRING T_PSEP T_DOUBLE T_PARENT_RIGHT T_BOPEN t_entry_list T_BCLOSE {
@@ -401,6 +409,7 @@ t_entry_list:
         ThemeWidget *d = $9->widgets[i];
         rofi_theme_parse_merge_widgets(widget, d);
     }
+    g_free ( $4 );
     g_free ( name );
 }
 | t_entry_list T_MEDIA T_PARENT_LEFT T_STRING T_PSEP T_INT T_UNIT_PX T_PARENT_RIGHT T_BOPEN t_entry_list T_BCLOSE {
@@ -414,6 +423,7 @@ t_entry_list:
         ThemeWidget *d = $10->widgets[i];
         rofi_theme_parse_merge_widgets(widget, d);
     }
+    g_free ( $4 );
     g_free ( name );
 }
 ;
@@ -438,6 +448,9 @@ t_config_property
         yyerror ( &(@$), @$.filename, error );
 #else
         g_warning("%s:%d:%d: %s\n", @$.filename, @$.first_line, @$.first_column, error);
+        GString *str = g_string_new("");
+        g_string_append_printf(str,"%s:%d:%d: %s\n", @$.filename, @$.first_line, @$.first_column, error);
+        rofi_add_error_message(str);
 #endif
         g_free(error);
     }
@@ -481,17 +494,25 @@ t_property
     $$ = $3;
     $$->name = $1;
    }
-|   t_property_name T_PSEP T_PARENT_LEFT T_ELEMENT T_PARENT_RIGHT T_PCLOSE{
+|   t_property_name T_PSEP T_VAR_START T_PARENT_LEFT T_ELEMENT T_PARENT_RIGHT T_PCLOSE{
         $$ = rofi_theme_property_create ( P_LINK );
         $$->name = $1;
-        $$->value.link.name = $4;
+        $$->value.link.name = $5;
     }
-|   t_property_name T_PSEP T_PARENT_LEFT T_ELEMENT T_COMMA t_property_element T_PARENT_RIGHT T_PCLOSE{
+|   t_property_name T_PSEP T_VAR_START T_PARENT_LEFT T_ELEMENT T_COMMA t_property_element T_PARENT_RIGHT T_PCLOSE{
         $$ = rofi_theme_property_create ( P_LINK );
         $$->name = $1;
-        $$->value.link.name = $4;
-        $$->value.link.def_value = $6;
+        $$->value.link.name = $5;
+        $$->value.link.def_value = $7;
     }
+| t_property_name T_PSEP T_ENV_START T_PARENT_LEFT T_COMMA t_property_element T_PARENT_RIGHT T_PCLOSE {
+  $$ = $6;
+  $$->name = $1;
+}
+| t_property_name T_PSEP T_ENV_START T_PARENT_LEFT t_property_element T_COMMA t_property_element T_PARENT_RIGHT T_PCLOSE {
+  $$ = $5;
+  $$->name = $1;
+}
 
 t_property_element
 :   T_INHERIT {

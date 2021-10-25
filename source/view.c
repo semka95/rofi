@@ -127,9 +127,8 @@ static void rofi_view_reload_message_bar(RofiViewState *state) {
   }
 }
 
-static gboolean rofi_view_user_timeout(G_GNUC_UNUSED gpointer data) {
-  CacheState.user_timeout = 0;
-  ThemeWidget *wid = rofi_config_find_widget("timeout", NULL, TRUE);
+static void rofi_view_take_action(const char *name) {
+  ThemeWidget *wid = rofi_config_find_widget(name, NULL, TRUE);
   if (wid) {
     /** Check string property */
     Property *p = rofi_theme_find_property(wid, P_STRING, "action", TRUE);
@@ -143,6 +142,10 @@ static gboolean rofi_view_user_timeout(G_GNUC_UNUSED gpointer data) {
       }
     }
   }
+}
+static gboolean rofi_view_user_timeout(G_GNUC_UNUSED gpointer data) {
+  CacheState.user_timeout = 0;
+  rofi_view_take_action("timeout");
   return G_SOURCE_REMOVE;
 }
 
@@ -446,7 +449,7 @@ static void update_callback(textbox *t, icon *ico, unsigned int index,
       list = pango_attr_list_new();
     }
     if (ico) {
-      int icon_height = widget_get_desired_height(WIDGET(ico));
+      int icon_height = widget_get_desired_height(WIDGET(ico), WIDGET(ico)->w);
       cairo_surface_t *icon =
           mode_get_icon(state->sw, state->line_map[index], icon_height);
       icon_set_surface(ico, icon);
@@ -616,6 +619,12 @@ void rofi_view_finalize(RofiViewState *state) {
     state->finalize(state);
   }
 }
+
+/**
+ * This function should be called when the input of the entry is changed.
+ * TODO: Evaluate if this needs to be a 'signal' on textbox?
+ */
+static void rofi_view_input_changed() { rofi_view_take_action("inputchange"); }
 
 static void rofi_view_trigger_global_action(KeyBindingAction action) {
   RofiViewState *state = rofi_view_get_active();
@@ -822,6 +831,7 @@ static void rofi_view_trigger_global_action(KeyBindingAction action) {
     if (rc == 1) {
       // Entry changed.
       state->refilter = TRUE;
+      rofi_view_input_changed();
     } else if (rc == 2) {
       // Movement.
     }
@@ -911,6 +921,7 @@ gboolean rofi_view_trigger_action(RofiViewState *state, BindingsScope scope,
 void rofi_view_handle_text(RofiViewState *state, char *text) {
   if (textbox_append_text(state->text, text, strlen(text))) {
     state->refilter = TRUE;
+    rofi_view_input_changed();
   }
 }
 
@@ -976,9 +987,13 @@ static WidgetTriggerActionResult textbox_button_trigger_action(
   switch (action) {
   case MOUSE_CLICK_DOWN: {
     const char *type = rofi_theme_get_string(wid, "action", NULL);
-    if (type) {
-      (state->selected_line) =
-          state->line_map[listview_get_selected(state->list_view)];
+    if (type ) {
+      if ( state->list_view) {
+        (state->selected_line) =
+        state->line_map[listview_get_selected(state->list_view)];
+      } else {
+          (state->selected_line) = UINT32_MAX;
+      }
       guint id = key_binding_get_action_from_name(type);
       if (id != UINT32_MAX) {
         rofi_view_trigger_global_action(id);
@@ -1277,8 +1292,6 @@ RofiViewState *rofi_view_create(Mode *sw, const char *input,
   state->distance = (int *)g_malloc0_n(state->num_lines, sizeof(int));
 
   rofi_view_calculate_window_width(state);
-  // Need to resize otherwise calculated desired height is wrong.
-  widget_resize(WIDGET(state->main_window), state->width, 100);
   // Only needed when window is fixed size.
   if ((CacheState.flags & MENU_NORMAL_WINDOW) == MENU_NORMAL_WINDOW) {
     listview_set_fixed_num_lines(state->list_view);
@@ -1341,10 +1354,7 @@ int rofi_view_error_dialog(const char *msg, int markup) {
     listview_set_fixed_num_lines(state->list_view);
   }
   rofi_view_calculate_window_width(state);
-  // Need to resize otherwise calculated desired height is wrong.
-  widget_resize(WIDGET(state->main_window), state->width, 100);
-  // resize window vertically to suit
-  state->height = widget_get_desired_height(WIDGET(state->main_window));
+  state->height = rofi_view_calculate_window_height(state);
 
   // Calculate window position.
   rofi_view_calculate_window_position(state);

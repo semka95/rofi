@@ -1,3 +1,4 @@
+.nh
 .TH ROFI 1 rofi
 .SH NAME
 .PP
@@ -46,7 +47,7 @@ The website for \fB\fCdmenu\fR can be found here
 
 .PP
 \fBrofi\fP does not aim to be 100% compatible with \fB\fCdmenu\fR\&. There are simply too many flavors of \fB\fCdmenu\fR\&.
-The idea is that the basic usage command\-line flags are obeyed, theme\-related flags are not.
+The idea is that the basic usage command\-\&line flags are obeyed, theme\-\&related flags are not.
 Besides, \fBrofi\fP offers some extended features (like multi\-select, highlighting, message bar, extra key bindings).
 
 .SS Display Error message
@@ -180,11 +181,7 @@ Specify the number of threads \fBrofi\fP should use:
 .IP \(bu 2
 1: Disable threading
 .IP \(bu 2
-
-.PP
-2..n: Specify the maximum number of threads to use in the thread pool.
-.PP
-Default:  Autodetect
+2..n: Specify the maximum number of threads to use in the thread pool.Default:  Autodetect
 
 .RE
 
@@ -382,7 +379,7 @@ If not specified default theme from DE is used, \fIAdwaita\fP and \fIgnome\fP th
 fallback themes.
 
 .PP
-\fB\fC\-fallback\-application\-icon\fR
+\fB\fC\-application\-fallback\-icon\fR
 
 .PP
 Specify an icon to be used when the application icon in run/drun are not yet loaded or is not available.
@@ -464,11 +461,7 @@ The different fields are:
 .IP \(bu 2
 \fBcomment\fP: the application comment
 .IP \(bu 2
-
-.PP
-\fBall\fP: all the above
-.PP
-Default: \fIname,generic,exec,categories,keywords\fP
+\fBall\fP: all the aboveDefault: \fIname,generic,exec,categories,keywords\fP
 
 .RE
 
@@ -541,11 +534,7 @@ The different fields are:
 .IP \(bu 2
 \fBdesktop\fP: window's current desktop
 .IP \(bu 2
-
-.PP
-\fBall\fP: all the above
-.PP
-Default: \fIall\fP
+\fBall\fP: all the aboveDefault: \fIall\fP
 
 .RE
 
@@ -602,7 +591,7 @@ Default: \fI0\fP
 \fB\fC\-fixed\-num\-lines\fR
 
 .PP
-Keep a fixed number of visible lines (See the \fB\fC\-lines\fR option.)
+Keep a fixed number of visible lines.
 
 .PP
 \fB\fC\-sidebar\-mode\fR
@@ -616,7 +605,7 @@ To show sidebar, use:
 .RS
 
 .nf
-rofi \-show run \-sidebar\-mode \-lines 0
+rofi \-show run \-sidebar\-mode 
 
 .fi
 .RE
@@ -678,11 +667,7 @@ behavior.)
 .IP \(bu 2
 \fB\-4\fP: the monitor with the focused window.
 .IP \(bu 2
-
-.PP
-\fB\-5\fP: the monitor that shows the mouse pointer.
-.PP
-Default: \fI\-5\fP
+\fB\-5\fP: the monitor that shows the mouse pointer.Default: \fI\-5\fP
 
 .RE
 
@@ -1006,7 +991,7 @@ Maximum number of lines the menu may show before scrolling.
 .RS
 
 .nf
-rofi \-lines 25
+rofi \-dmenu \-l 25
 
 .fi
 .RE
@@ -1100,7 +1085,7 @@ Select first line that matches the given string
 .PP
 Add a message line below the filter entry box. Supports Pango markup.
 For more information on supported markup, see here
-\[la]https://developer.gnome.org/pygtk/stable/pango-markup-language.html\[ra]
+\[la]https://docs.gtk.org/Pango/pango_markup.html\[ra]
 
 .PP
 \fB\fC\-dump\fR
@@ -1180,7 +1165,7 @@ Set ellipsize mode to start. So, the end of the string is visible.
 
 .PP
 Pops up a message dialog (used internally for showing errors) with \fImessage\fP\&.
-Message can be multi\-line.
+Message can be multi\-\&line.
 
 .SS File browser settings
 .PP
@@ -1392,6 +1377,46 @@ To get a searchable list of key bindings, run \fB\fCrofi \-show keys\fR\&.
 
 .PP
 A key binding starting with \fB\fC!\fR will act when all keys have been released.
+
+.PP
+You can bind certain events to key\-actions:
+
+.SS Timeout
+.PP
+You can configure an action to be taken when rofi has not been interacted
+with for a certain amount of seconds. You can specify a keybinding to trigger
+after X seconds.
+
+.PP
+.RS
+
+.nf
+configuration {
+  timeout {
+      delay:  15;
+      action: "kb\-cancel";
+  }
+}
+
+.fi
+.RE
+
+.SS Input change
+.PP
+When the input of the textbox changes:
+
+.PP
+.RS
+
+.nf
+configuration {
+  inputchange {
+      action: "kb\-row\-first";
+  }
+}
+
+.fi
+.RE
 
 .SH Available Modi
 .SS window
@@ -1759,21 +1784,21 @@ first.
 .SH AUTHOR
 .RS
 .IP \(bu 2
-Qball Cow 
-\[la]qball@blame.services\[ra]
+Qball Cow qball@blame.services
+\[la]mailto:qball@blame.services\[ra]
 .IP \(bu 2
-Rasmus Steinke 
-\[la]rasi@xssn.at\[ra]
+Rasmus Steinke rasi@xssn.at
+\[la]mailto:rasi@xssn.at\[ra]
 .IP \(bu 2
-Quentin Glidic 
-\[la]sardemff7+rofi@sardemff7.net\[ra]
+Quentin Glidic sardemff7+rofi@sardemff7.net
+\[la]mailto:sardemff7+rofi@sardemff7.net\[ra]
 
 .RE
 
 .PP
 Original code based on work by: Sean Pringle
-\[la]https://github.com/seanpringle/simpleswitcher\[ra] 
-\[la]sean.pringle@gmail.com\[ra]
+\[la]https://github.com/seanpringle/simpleswitcher\[ra] sean.pringle@gmail.com
+\[la]mailto:sean.pringle@gmail.com\[ra]
 
 .PP
 For a full list of authors, check the \fB\fCAUTHORS\fR file.

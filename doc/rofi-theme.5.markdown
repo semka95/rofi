@@ -4,6 +4,30 @@
 
 **rofi-theme** - Rofi theme format files
 
+## DEFAULT THEME LOADING
+
+By default, rofi loads the default theme. This theme is **always** loaded.
+In the default (always loaded) configuration it does:
+
+```css
+@theme "default"
+```
+
+To unload the default theme, and load another theme, add `@theme` to your
+`config.rasi` file.
+
+If you have a theme loaded by `@theme` or use the default theme, you can tweak
+it by adding overriding elements at the end of your `config.rasi` file.
+
+For the difference between `@import` and `@theme` see the `Multiple file
+handling` section in this manpage.
+
+To see the default theme, run the following command:
+
+```bash
+rofi -no-config -dump-theme
+```
+
 ## DESCRIPTION
 
 The need for a new theme format was motivated by the fact that the way rofi handled widgets has changed. From a very
@@ -470,6 +494,23 @@ window {
 }
 ```
 
+* Format: `var(PROPERTY NAME, DEFAULT)`
+
+A reference can point to another reference. Currently, the maximum number of redirects is 20.
+A property always refers to another property. It cannot be used for a subpart of the property.
+
+Example:
+
+```css
+window {
+    width: var( width, 30%);
+}
+```
+
+If the property `width` is set globally (`*{}`) that value is used, if the property
+`width` is not set, the default value is used.
+
+
 ## Orientation
 
  * Format: `(horizontal|vertical)`
@@ -501,6 +542,20 @@ The environment variable should be an alphanumeric string without white-space.
     background-color: ${BG};
 }
 ```
+
+* Format: `env(ENVIRONMENT, default)`
+
+This will parse the environment variable as the property value. (that then can be any of the above types).
+The environment variable should be an alphanumeric string without white-space.
+If the environment value is not found, the default value is used.
+
+```css
+window {
+    width: env(WIDTH, 40%);
+}
+```
+
+If environment WIDTH is set, then that value is parsed, otherwise the default value (`40%`).
 
 ## Inherit
 
@@ -786,6 +841,12 @@ The current layout of **rofi** is structured as follows:
 | |                                                                               |  |
 | | |-----------------------------------------------------------------------------|  |
 | | | listview                                                                    |  |
+| | | |------------------------------------------------------------------------]  |  |
+| | | | element                                                                |  |  |
+| | | | |-----------------| |------------------------------------------------] |  |  |
+| | | | |element-icon     | |element-text                                    | |  |  |
+| | | | |-----------------| |------------------------------------------------| |  |  |
+| | | |------------------------------------------------------------------------]  |  |
 | | |-----------------------------------------------------------------------------|  |
 | |                                                                               |  |
 | | |---------------------------------------------------------------------------| |  |
@@ -812,9 +873,6 @@ The current layout of **rofi** is structured as follows:
 | | error-message {BOX:vertical}                                                 |  |
 | | |-------------------------------------------------------------------------|  |  |
 | | | textbox                                                                 |  |  |
-| | | |-----------------| |-------------------------------------------------| |  |  |
-| | | |element-icon     | |element-text                                     | |  |  |
-| | | |-----------------| |-------------------------------------------------| |  |  |
 | | |-------------------------------------------------------------------------|  |  |
 | |------------------------------------------------------------------------------|  |
 |-----------------------------------------------------------------------------------|
@@ -1013,15 +1071,15 @@ This property sets the distance between the packed widgets (both horizontally an
 More dynamic spacing can be achieved by adding dummy widgets, for example to make one widget centered:
 
 ```
-|--------------------------------------------|
-|  |-----------|  |--------|  |-----------|  |
-|  | dummy     |  | child  |  | dummy     |  |
-|  | expand: y |  |        |  | expand: y |  |
-|  |           |  |        |  |           |  |
-|  |           |  |        |  |           |  |
-|  |           |  |        |  |           |  |
-|  |-----------|  |--------|  |-----------|  |
-|--------------------------------------------|
+|----------------------------------------------------|
+|  |---------------|  |--------|  |---------------|  |
+|  | dummy         |  | child  |  | dummy         |  |
+|  | expand: true; |  |        |  | expand: true; |  |
+|  |               |  |        |  |               |  |
+|  |               |  |        |  |               |  |
+|  |               |  |        |  |               |  |
+|  |---------------|  |--------|  |---------------|  |
+|----------------------------------------------------|
 ```
 
 If both dummy widgets are set to expand, `child` will be centered. Depending on the `expand` flag of child the

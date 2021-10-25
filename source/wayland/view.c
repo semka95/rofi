@@ -379,7 +379,7 @@ static int wayland_rofi_view_calculate_window_height(RofiViewState *state) {
   // Autosize based on widgets.
   widget *main_window = WIDGET(state->main_window);
 
-  height = widget_get_desired_height(main_window);
+  height = widget_get_desired_height(main_window, state->width);
   return height;
 }
 

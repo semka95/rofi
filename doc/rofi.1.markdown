@@ -222,7 +222,7 @@ Specify icon theme to be used.
 If not specified default theme from DE is used, *Adwaita* and *gnome* themes act as
 fallback themes.
 
-`-fallback-application-icon`
+`-application-fallback-icon`
 
 Specify an icon to be used when the application icon in run/drun are not yet loaded or is not available.
 
@@ -345,7 +345,7 @@ Default: *0*
 
 `-fixed-num-lines`
 
-Keep a fixed number of visible lines (See the `-lines` option.)
+Keep a fixed number of visible lines. 
 
 `-sidebar-mode`
 
@@ -353,7 +353,7 @@ Open in sidebar-mode. In this mode, a list of all enabled modes is shown at the 
 (See `-modi` option)
 To show sidebar, use:
 
-    rofi -show run -sidebar-mode -lines 0
+    rofi -show run -sidebar-mode 
 
 `-hover-select`
 
@@ -591,7 +591,7 @@ Default: *dmenu*
 
 Maximum number of lines the menu may show before scrolling.
 
-    rofi -lines 25
+    rofi -dmenu -l 25
 
 Default: *15*
 
@@ -645,7 +645,7 @@ Select first line that matches the given string
 `-mesg` *string*
 
 Add a message line below the filter entry box. Supports Pango markup.
-For more information on supported markup, see [here](https://developer.gnome.org/pygtk/stable/pango-markup-language.html)
+For more information on supported markup, see [here](https://docs.gtk.org/Pango/pango_markup.html)
 
 `-dump`
 
@@ -837,6 +837,36 @@ to one action by comma separating them. For example `-kb-primary-paste "Conctrol
 To get a searchable list of key bindings, run `rofi -show keys`.
 
 A key binding starting with `!` will act when all keys have been released.
+
+You can bind certain events to key-actions:
+
+### Timeout
+
+You can configure an action to be taken when rofi has not been interacted
+with for a certain amount of seconds. You can specify a keybinding to trigger
+after X seconds.
+
+```css
+configuration {
+  timeout {
+      delay:  15;
+      action: "kb-cancel";
+  }
+}
+```
+
+### Input change
+
+When the input of the textbox changes:
+
+```css
+configuration {
+  inputchange {
+      action: "kb-row-first";
+  }
+}
+```
+
 
 ## Available Modi
 

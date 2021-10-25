@@ -825,7 +825,7 @@ static int xcb_rofi_view_calculate_window_height(RofiViewState *state) {
   }
   // Autosize based on widgets.
   widget *main_window = WIDGET(state->main_window);
-  return widget_get_desired_height(main_window);
+  return widget_get_desired_height(main_window, state->width);
 }
 
 static void xcb_rofi_view_hide(void) {

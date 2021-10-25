@@ -157,7 +157,7 @@ flex = generator(find_program('flex'),
 )
 bison = generator(find_program('bison'),
     output: [ '@BASENAME@.c', '@BASENAME@.h' ],
-    arguments: [ '-d', '@INPUT@', '--defines=@OUTPUT1@', '--output=@OUTPUT0@' ]
+    arguments: [ '--verbose', '-d', '@INPUT@', '--defines=@OUTPUT1@', '--output=@OUTPUT0@' ]
 )
 
 rofi_sources = files(
@@ -364,6 +364,7 @@ test('helper_pidfile test', executable('helper_pidfile.test', [
     objects: rofi.extract_objects([
         'config/config.c',
         'source/theme.c',
+        'source/css-colors.c',
         'source/helper.c',
         'source/xrmoptions.c',
         'source/rofi-types.c',
@@ -382,6 +383,7 @@ test('widget test', executable('widget.test', [
         'source/widgets/widget.c',
         'source/widgets/textbox.c',
         'source/theme.c',
+        'source/css-colors.c',
         'source/rofi-types.c',
         'source/css-colors.c',
         'source/helper.c',
@@ -400,6 +402,7 @@ test('box test', executable('box.test', [
         'source/widgets/widget.c',
         'source/widgets/box.c',
         'source/theme.c',
+        'source/css-colors.c',
         'source/rofi-types.c',
         'source/css-colors.c',
         'config/config.c',
@@ -417,6 +420,7 @@ test('scrollbar test', executable('scrollbar.test', [
         'source/widgets/widget.c',
         'source/widgets/scrollbar.c',
         'source/theme.c',
+        'source/css-colors.c',
         'source/rofi-types.c',
         'source/css-colors.c',
         'config/config.c',
@@ -434,6 +438,7 @@ test('textbox test', executable('textbox.test', [
         'source/widgets/widget.c',
         'source/widgets/textbox.c',
         'source/theme.c',
+        'source/css-colors.c',
         'source/rofi-types.c',
         'source/css-colors.c',
         'source/helper.c',
@@ -448,6 +453,7 @@ test('helper test', executable('helper.test', [
     objects: rofi.extract_objects([
         'config/config.c',
         'source/theme.c',
+        'source/css-colors.c',
         'source/helper.c',
         'source/xrmoptions.c',
         'source/rofi-types.c',
@@ -461,6 +467,7 @@ test('helper_expand test', executable('helper_expand.test', [
     objects: rofi.extract_objects([
         'config/config.c',
         'source/theme.c',
+        'source/css-colors.c',
         'source/helper.c',
         'source/xrmoptions.c',
         'source/rofi-types.c',
@@ -474,6 +481,7 @@ test('helper_config_cmdline_parser test', executable('helper_config_cmdline_pars
     objects: rofi.extract_objects([
         'config/config.c',
         'source/theme.c',
+        'source/css-colors.c',
         'source/helper.c',
         'source/xrmoptions.c',
         'source/rofi-types.c',
@@ -495,6 +503,7 @@ if check.found()
             'source/helper.c',
             'source/xrmoptions.c',
             'source/theme.c',
+            'source/css-colors.c',
             'source/rofi-types.c',
             'source/css-colors.c',
         ]),
@@ -509,6 +518,7 @@ if check.found()
             'source/dialogs/help-keys.c',
             'source/helper.c',
             'source/theme.c',
+            'source/css-colors.c',
             'source/mode.c',
             'source/xrmoptions.c',
             'source/rofi-types.c',
@@ -524,6 +534,7 @@ if check.found()
             'config/config.c',
             'source/helper.c',
             'source/theme.c',
+            'source/css-colors.c',
             'source/xrmoptions.c',
             'source/rofi-types.c',
         ]),
