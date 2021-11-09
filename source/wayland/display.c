@@ -534,7 +534,7 @@ static void wayland_pointer_send_events(wayland_seat *self) {
 
   if (self->motion.x > -1 || self->motion.y > -1) {
     // TODO: hover select
-    rofi_view_handle_mouse_motion(state, self->motion.x, self->motion.y, FALSE);
+    rofi_view_handle_mouse_motion(state, self->motion.x, self->motion.y, TRUE);
     self->motion.x = -1;
     self->motion.y = -1;
   }
