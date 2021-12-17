@@ -1,10 +1,19 @@
-[![Issues](https://img.shields.io/github/issues/lbonn/rofi.svg)](https://github.com/lbonn/rofi/issues)
-[![Forks](https://img.shields.io/github/forks/lbonn/rofi.svg)](https://github.com/lbonn/rofi/network)
-[![Stars](https://img.shields.io/github/stars/lbonn/rofi.svg)](https://github.com/lbonn/rofi/stargazers)
-[![Downloads](https://img.shields.io/github/downloads/lbonn/rofi/total.svg)](https://github.com/lbonn/rofi/releases)
-[![Packages](https://repology.org/badge/tiny-repos/rofi-wayland.svg)](https://repology.org/metapackage/rofi-wayland/versions)
+<p align="center">
+<a href="https://github.com/lbonn/rofi/issues"><img src="https://img.shields.io/github/issues/lbonn/rofi.svg"></a>
+<a href="https://img.shields.io/github/forks/lbonn/rofi.svg"><img src="https://img.shields.io/github/forks/lbonn/rofi.svg"></a>
+<a href="https://github.com/lbonn/rofi/stargazers"><img src="https://img.shields.io/github/stars/lbonn/rofi.svg"></a>
+<a href="https://github.com/lbonn/rofi/releases"><img src="https://img.shields.io/github/downloads/lbonn/rofi/total.svg"></a>
+<a href="https://github.com/lbonn/rofi/discussions"><img src="https://img.shields.io/badge/forum-online-green.svg"></a>
+<a href="https://repology.org/metapackage/rofi-wayland/versions"><img src="https://repology.org/badge/tiny-repos/rofi-wayland.svg"></a>
+</p>
 
-# A window switcher, Application launcher and dmenu replacement
+<h1 align="center">
+  Rofi
+</h1>
+<p align="center"><i>A window switcher, Application launcher and dmenu replacement</i>.</p>
+
+https://user-images.githubusercontent.com/84911063/139428874-fe182dd6-82c6-49b8-8da1-920ddda3d1ed.mp4
+
 
 **This is a fork of [Rofi](https://github.com/davatorium/rofi) with added support for Wayland via the [layer shell protocol](https://github.com/swaywm/wlr-protocols).**
 **For more information, see the [Wayland support section](#wayland-support)**
@@ -17,6 +26,34 @@ ssh-launcher, and can act as a drop-in dmenu replacement, making it a very versa
 
 **Rofi**, like dmenu, will provide the user with a textual list of options where one or more can be selected.
 This can either be running an application, selecting a window, or options provided by an external script.
+
+
+## What is rofi not?
+
+Rofi is not:
+
+*   A UI toolkit.
+*   A library to be used in other applications.
+*   An application that can support every possible use-case. It tries to be generic enough to be usable by everybody.
+    * Specific functionality can be added using scripts or plugins, many exists.
+*   Just a dmenu replacement. The dmenu functionality is a nice 'extra' to **rofi**, not its main purpose.
+
+
+# Table of Contents
+
+- [Features](#features)
+- [Modi](#modi)
+- [Manpages](#manpage)
+- [Installation](#installation)
+- [Quickstart](#quickstart) 
+   - [Usage](#usage)
+   - [Configuration](#configuration)
+   - [Themes](#themes)
+- [Screenshots](#screenshots)
+- [Wiki](#wiki)
+- [Discussion places](#discussion-places)
+
+# Features
 
 Its main features are:
 
@@ -43,6 +80,8 @@ Its main features are:
     *   Many added improvements
 *   Easily extensible using scripts and plugins
 *   Advanced Theming
+
+# Modi
 
 **Rofi** has several built-in modi implementing common use cases and can be extended by scripts (either called from
 **Rofi** or calling **Rofi**) or plugins.
@@ -88,38 +127,108 @@ If you find something does not work and is not listed here, please open a PR.
 
 I do not intend to make releases from this fork at the moment, but will simply try to keep it regularly in sync with the develop branch upstream.
 
-# Screenshots
-
-![screenshot](https://raw.githubusercontent.com/davatorium/rofi/next/releasenotes/1.6.0/icons.png)
-![screenshot2](https://raw.githubusercontent.com/davatorium/rofi/next/releasenotes/1.6.0/icons2.png)
-![default](https://raw.githubusercontent.com/davatorium/rofi/next/releasenotes/1.4.0/rofi-no-fzf.png)
-
 # Manpage
 
-For more up to date information, please see the manpages:
+For more up to date information, please see the manpages. The other sections and links might have outdated information as they have relatively less maintainance than the manpages. So, if you come across any issues please consult manpages, [discussion](https://github.com/davatorium/rofi/discussions) and [issue traker](https://github.com/davatorium/rofi/issues?q=) before filing new issue.
 
  * Manpages:
      * [rofi](doc/rofi.1.markdown)
      * [rofi-theme](doc/rofi-theme.5.markdown)
      * [rofi-script](doc/rofi-script.5.markdown)
      * [rofi-theme-selector](doc/rofi-theme-selector.1.markdown)
- * Discussion places:
-     * [Reddit](https://reddit.com/r/qtools/)
-     * [GitHub Discussions](https://github.com/davatorium/rofi/discussions)
-     * IRC (#rofi on irc.libera.chat)
- * [wiki](https://github.com/davatorium/rofi/wiki) (Currently unmaintained).
 
 # Installation
 
 Please see the [installation guide](INSTALL.md) for instructions on how to
 install **Rofi**.
 
-# What is rofi not?
+# Quickstart
 
-Rofi is not:
+## Usage
 
-*   A UI toolkit.
-*   A library to be used in other applications.
-*   An application that can support every possible use-case. It tries to be generic enough to be usable by everybody.
-    * Specific functionality can be added using scripts or plugins, many exists.
-*   Just a dmenu replacement. The dmenu functionality is a nice 'extra' to **rofi**, not its main purpose.
+> **This section just gives a brief overview of the various options. To get the full set of options see the _manpages_ section above**
+
+#### Running rofi
+
+To launch **rofi** directly in a certain mode, specify a mode with `rofi -show <mode>`.
+To show the `run` dialog:
+
+    rofi -show run
+
+Or get the options from a script:
+
+    ~/my_script.sh | rofi -dmenu
+
+Specify an ordered, comma-separated list of modes to enable.
+Enabled modes can be changed at runtime. Default key is `Ctrl+Tab`.
+If no modes are specified, all configured modes will be enabled.
+To only show the `run` and `ssh` launcher:
+
+    rofi -modi "run,ssh" -show run
+
+
+The modi to combine in combi mode.
+For syntax to `-combi-modi`, see `-modi`.
+To get one merge view, of `window`,`run`, and `ssh`:
+
+    rofi -show combi -combi-modi "window,run,ssh" -modi combi
+
+## Configuration
+
+Generate a default configuration file
+```
+mkdir -p ~/.config/rofi
+rofi -dump-config > ~/.config/rofi/config.rasi
+```
+
+This creates a file called `config.rasi` in the `~/.config/rofi/` folder. You can modify this file to set configuration settings and modify themes. `config.rasi` is the file rofi looks to by default.
+
+Please see the [configuration guide](https://github.com/davatorium/rofi/blob/next/CONFIG.md) for a summary of configuration options. More detailed options are provided in the manpages.
+
+## Themes
+
+Please see the [themes](https://github.com/davatorium/rofi/wiki/themes) section from the [wiki](https://github.com/davatorium/rofi/wiki) for brief reference. More detailed options are provided in the [themes manpages](https://github.com/davatorium/rofi/blob/next/doc/rofi-theme.5.markdown).
+
+The latest bundled themes can be found [here](https://github.com/davatorium/rofi/tree/next/themes).
+
+# Screenshots
+
+Rezlooks:
+
+![screenshot](https://raw.githubusercontent.com/davatorium/rofi/next/releasenotes/1.6.0/icons.png)
+
+Arthur:
+
+![screenshot2](https://raw.githubusercontent.com/davatorium/rofi/next/releasenotes/1.6.0/icons2.png)
+
+Default theme:
+
+![default](https://raw.githubusercontent.com/davatorium/rofi/next/releasenotes/1.4.0/rofi-no-fzf.png)
+
+# Wiki 
+
+| ❗ **The Wiki is currently unmaintained and might contain outdated data ** |
+| --- |
+
+[Go to wiki](https://github.com/davatorium/rofi/wiki) .
+
+#### Contents
+
+* [Debugging](https://github.com/davatorium/rofi/wiki/Debugging-Rofi)
+* [User scripts](https://github.com/davatorium/rofi/wiki/User-scripts)
+* [Examples](https://github.com/davatorium/rofi/wiki#examples)
+* [dmenu Specs](https://github.com/davatorium/rofi/wiki/dmenu_specs)
+* [mode Specs](https://github.com/davatorium/rofi/wiki/mode-Specs)
+* [F.A.Q.](https://github.com/davatorium/rofi/wiki/Frequently-Asked-Questions).
+* [Script mode](https://github.com/davatorium/rofi/wiki/rfc-script-mode)
+* [Creating an issue](https://github.com/davatorium/rofi/blob/master/.github/CONTRIBUTING.md)
+* [Creating a Pull request](https://github.com/davatorium/rofi/wiki/Creating-a-pull-request)
+
+# Discussion places:
+
+The [GitHub Discussions](https://github.com/davatorium/rofi/discussions) is the preferred location
+for discussions.
+
+  * [GitHub Discussions](https://github.com/davatorium/rofi/discussions)
+  * IRC (#rofi on irc.libera.chat)
+  * [Reddit](https://reddit.com/r/qtools/)

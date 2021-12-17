@@ -387,7 +387,7 @@ static void help_print_disabled_mode(const char *mode) {
             color_red, mode, color_reset);
     fprintf(stderr,
             "Please consider adding %s%s%s to the list of enabled modi: "
-            "%smodi: %s%s%s,%s%s.\n",
+            "%smodi: [%s%s%s,%s]%s.\n",
             color_red, mode, color_reset, color_green, config.modi, color_reset,
             color_red, mode, color_reset);
   }
@@ -976,7 +976,11 @@ int main(int argc, char *argv[]) {
     TICK_N("Parsed theme");
   }
   // Parse command line for settings, independent of other -no-config.
-  config_parse_cmd_options();
+  if (list_of_error_msgs == NULL) {
+    // Only call this when there are no errors.
+    // This might clear existing errors.
+    config_parse_cmd_options();
+  }
   TICK_N("Load cmd config ");
 
   parse_keys_abe(bindings);
