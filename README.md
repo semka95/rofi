@@ -101,31 +101,32 @@ Below is a list of the different modi:
 
 # Wayland support
 
-Wayland support is enabled by default in this fork, along with X11/xcb. You can build rofi _without_ XCB, if you like:
 
-```
-meson build -Dxcb=disabled
-```
+## Build
 
-The rest of the installation process is unchanged (see [Installation](#Installation)).
+Please follow the [meson build instructions](INSTALL.md#meson) to build this fork, as autotools builds are not yet supported.
 
-**Rofi** can be invoked with the same CLI and configuration and can be forced to use X11 mode with the x11 flag (unless the X11 backend was disabled in build):
+Wayland support is enabled by default in this fork, along with X11/xcb.
+
+rofi can also be built _without_ XCB:
+
+    meson build -Dxcb=disabled
+
+## Usage
+
+**Rofi** options an configurations are compatible with this fork. It should automatically select the xcb or wayland backend depending on the environment it is run on.
+
+To force the use of the xcb backend (if enabled during build), the `-x11` option can be used:
 
     rofi -x11 ...
 
-This port to layer shell is not yet in a stable state, so expect to encounter some rough edges. That said, the core of Rofi's functionalities is present.
+## Differences with rofi (in wayland mode)
 
-Notable omissions:
-
-  * native window mode when running under Wayland. Recommended solution: https://github.com/lbonn/i3-focus-last#menu-mode or https://sr.ht/~tsdh/swayr/
-  * `-normal-window` flag in Wayland mode. Upstream rofi considers it a toy/deprecated feature AFAIK
+  * native window selection mode when running under Wayland. Recommended solution: https://github.com/lbonn/i3-focus-last#menu-mode or https://sr.ht/~tsdh/swayr/
+  * `-normal-window` flag in Wayland mode. Though it is also considered as a toy/deprecated feature in Upstream rofi
   * selecting which monitor to run rofi on in Wayland mode, rofi only shows up on the currently focused monitor
   * some window locations parameters work partially, `x-offset` and `y-offset` are only working from screen edges
   * some X11-specific options like `-dpi` or fake transparency
-
-If you find something does not work and is not listed here, please open a PR.
-
-I do not intend to make releases from this fork at the moment, but will simply try to keep it regularly in sync with the develop branch upstream.
 
 # Manpage
 
