@@ -203,3 +203,7 @@ https://aur.archlinux.org/packages/rofi-lbonn-wayland-git/
 ### Fedora
 
 https://copr.fedorainfracloud.org/coprs/alebastr/sway-extras/
+
+### NixOS
+
+rofi-wayland is integrated in nixpkgs master ([PR](https://github.com/NixOS/nixpkgs/pull/150169))
